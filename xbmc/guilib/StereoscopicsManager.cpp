@@ -358,6 +358,8 @@ bool CStereoscopicsManager::OnMessage(CGUIMessage &message)
   switch (message.GetMessage())
   {
   case GUI_MSG_PLAYBACK_STARTED:
+  case GUI_MSG_PLAYLISTPLAYER_STARTED:
+  case GUI_MSG_PLAYLISTPLAYER_CHANGED:
     OnPlaybackStarted();
     break;
   case GUI_MSG_PLAYBACK_STOPPED:
@@ -442,12 +444,19 @@ void CStereoscopicsManager::ApplyStereoMode(const RENDER_STEREO_MODE &mode, bool
 
 void CStereoscopicsManager::OnPlaybackStarted(void)
 {
-  if (!g_infoManager.EvaluateBool("videoplayer.isstereoscopic"))
-    return;
-
-  // only change stereo mode if not yet in stereo mode
   RENDER_STEREO_MODE mode = GetStereoMode();
-  if (mode != RENDER_STEREO_MODE_OFF)
+
+  if (!g_infoManager.EvaluateBool("videoplayer.isstereoscopic"))
+  {
+    // exit stereo mode if started item is not stereoscopic but we're currently in a stereo mode
+    if (mode != RENDER_STEREO_MODE_OFF)
+      SetStereoMode(RENDER_STEREO_MODE_OFF);
+    return;
+  }
+
+  // only change stereo mode if not yet in preferred stereo mode
+  RENDER_STEREO_MODE preferred = GetPreferredPlaybackMode();
+  if (mode != RENDER_STEREO_MODE_OFF && mode == preferred)
     return;
 
   int playbackMode = CSettings::Get().GetInt("videoplayer.stereoscopicplaybackmode");
@@ -461,8 +470,7 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
       pDlgSelect->Reset();
       pDlgSelect->SetHeading(g_localizeStrings.Get(36527).c_str());
 
-      RENDER_STEREO_MODE preferred = GetPreferredPlaybackMode();
-      RENDER_STEREO_MODE playing   = GetStereoModeOfPlayingVideo();
+      RENDER_STEREO_MODE playing = GetStereoModeOfPlayingVideo();
 
       int idx_playing   = -1
         , idx_mono      = -1;
@@ -503,7 +511,7 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
     }
     break;
   case 1: // Stereoscopic
-    SetStereoMode( GetPreferredPlaybackMode() );
+    SetStereoMode( preferred );
     break;
   default:
     break;
