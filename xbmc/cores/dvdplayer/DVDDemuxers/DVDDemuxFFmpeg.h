@@ -132,6 +132,10 @@ protected:
   void UpdateCurrentPTS();
   bool IsProgramChange();
 
+  std::string ConvertCodecToInternalStereoMode(const std::string &mode);
+  std::string GetStereoModeFromStream(const AVStream* pStream);
+  std::string GetStereoModeFromMetadata(AVDictionary* pMetadata);
+
   CCriticalSection m_critSection;
   std::map<int, CDemuxStream*> m_streams;
   std::vector<std::map<int, CDemuxStream*>::iterator> m_stream_index;
