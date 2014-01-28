@@ -63,6 +63,7 @@ public:
   RENDER_STEREO_MODE GetStereoModeOfPlayingVideo(void);
   const std::string &GetLabelForStereoMode(const RENDER_STEREO_MODE &mode) const;
   RENDER_STEREO_MODE GetPreferredPlaybackMode(void);
+  std::string GetStereoModeInverted(const std::string &mode);
   int ConvertVideoToGuiStereoMode(const std::string &mode);
   /**
    * @brief will convert a string representation into a GUI stereo mode

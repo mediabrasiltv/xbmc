@@ -46,6 +46,7 @@
 #include "cores/VideoRenderers/RenderFormats.h"
 #include "cores/VideoRenderers/RenderFlags.h"
 #include "guilib/GraphicContext.h"
+#include "guilib/StereoscopicsManager.h"
 
 #include "DVDPlayer.h"
 #include "linux/RBP.h"
@@ -277,7 +278,7 @@ std::string OMXPlayerVideo::GetStereoMode()
   }
 
   if(CMediaSettings::Get().GetCurrentVideoSettings().m_StereoInvert)
-    stereo_mode = GetStereoModeInvert(stereo_mode);
+    stereo_mode = CStereoscopicsManager::Get().GetStereoModeInverted(stereo_mode);
   return stereo_mode;
 }
 

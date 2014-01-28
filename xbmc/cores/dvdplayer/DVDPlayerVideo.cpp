@@ -43,6 +43,7 @@
 #include <numeric>
 #include <iterator>
 #include "guilib/GraphicContext.h"
+#include "guilib/StereoscopicsManager.h"
 #include "utils/log.h"
 
 using namespace std;
@@ -963,7 +964,7 @@ std::string CDVDPlayerVideo::GetStereoMode()
   }
 
   if(CMediaSettings::Get().GetCurrentVideoSettings().m_StereoInvert)
-    stereo_mode = GetStereoModeInvert(stereo_mode);
+    stereo_mode = CStereoscopicsManager::Get().GetStereoModeInverted(stereo_mode);
   return stereo_mode;
 }
 

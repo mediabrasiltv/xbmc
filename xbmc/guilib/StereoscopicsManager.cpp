@@ -54,6 +54,12 @@ struct StereoModeMap
   RENDER_STEREO_MODE   mode;
 };
 
+struct StrStereoModeMap
+{
+  const char*   mode1;
+  const char*   mode2;
+};
+
 static const struct StereoModeMap VideoModeToGuiModeMap[] =
 {
   { "mono",                     RENDER_STEREO_MODE_OFF },
@@ -94,6 +100,22 @@ static const struct StereoModeMap StringToGuiModeMap[] =
   {}
 };
 
+static const struct StrStereoModeMap StereoModeInvertMap[] =
+{
+  { "left_right",               "right_left" },
+  { "right_left",               "left_right" },
+  { "bottom_top",               "top_bottom" },
+  { "top_bottom",               "bottom_top" },
+  { "checkerboard_rl",          "checkerboard_lr" },
+  { "checkerboard_lr",          "checkerboard_rl" },
+  { "row_interleaved_rl",       "row_interleaved_lr" },
+  { "row_interleaved_lr",       "row_interleaved_rl" },
+  { "col_interleaved_rl",       "col_interleaved_lr" },
+  { "col_interleaved_lr",       "col_interleaved_rl" },
+  { "block_lr",                 "block_lr" },
+  { "block_rl",                 "block_rl" },
+  {}
+};
 
 CStereoscopicsManager::CStereoscopicsManager(void)
 {
@@ -295,6 +317,18 @@ const std::string &CStereoscopicsManager::GetLabelForStereoMode(const RENDER_STE
 RENDER_STEREO_MODE CStereoscopicsManager::GetPreferredPlaybackMode(void)
 {
   return (RENDER_STEREO_MODE) CSettings::Get().GetInt("videoscreen.preferedstereoscopicmode");
+}
+
+std::string CStereoscopicsManager::GetStereoModeInverted(const std::string &mode)
+{
+  size_t i = 0;
+  while (StereoModeInvertMap[i].mode1)
+  {
+    if (mode == StereoModeInvertMap[i].mode1)
+      return StereoModeInvertMap[i].mode2;
+    i++;
+  }
+  return mode;
 }
 
 int CStereoscopicsManager::ConvertVideoToGuiStereoMode(const std::string &mode)
