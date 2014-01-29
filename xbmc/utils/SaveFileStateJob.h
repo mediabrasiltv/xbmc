@@ -26,6 +26,7 @@
 #include "pvr/recordings/PVRRecordings.h"
 #include "settings/MediaSettings.h"
 #include "network/upnp/UPnP.h"
+//#include "guilib/StereoscopicsManager.h"
 
 class CSaveFileStateJob : public CJob
 {
@@ -137,6 +138,7 @@ bool CSaveFileStateJob::DoWork()
         if (CMediaSettings::Get().GetCurrentVideoSettings() != CMediaSettings::Get().GetDefaultVideoSettings())
         {
           videodatabase.SetVideoSettings(progressTrackingFile, CMediaSettings::Get().GetCurrentVideoSettings());
+          //CStereoscopicsManager::Get().OnVideoSettingsChanged(m_item, CMediaSettings::Get().GetCurrentVideoSettings());
         }
 
         if (m_item.HasVideoInfoTag() && m_item.GetVideoInfoTag()->HasStreamDetails())

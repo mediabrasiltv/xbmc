@@ -5778,6 +5778,8 @@ void CApplication::SaveCurrentFileSettings()
       dbs.Open();
       dbs.SetVideoSettings(m_itemCurrentFile->GetPath(), CMediaSettings::Get().GetCurrentVideoSettings());
       dbs.Close();
+	    //CFileItem item = m_itemCurrentFile.get();
+      //CStereoscopicsManager::Get().OnVideoSettingsChanged(item, CMediaSettings::Get().GetCurrentVideoSettings());
     }
   }
   else if (m_itemCurrentFile->IsPVRChannel())

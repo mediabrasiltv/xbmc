@@ -32,6 +32,7 @@
 
 class CAction;
 class CFileItem;
+//class CVideoSettings;
 
 class CStereoscopicsManager : public ISettingCallback,
                               public IMsgTargetCallback
@@ -76,6 +77,7 @@ public:
    */
   CAction ConvertActionCommandToAction(const std::string &command, const std::string &parameter);
   std::string NormalizeStereoMode(const std::string &mode);
+//  virtual void OnVideoSettingsChanged(CFileItem &item, CVideoSettings &videoSettings);
   virtual void OnSettingChanged(const CSetting *setting);
   virtual bool OnMessage(CGUIMessage &message);
   /*!
