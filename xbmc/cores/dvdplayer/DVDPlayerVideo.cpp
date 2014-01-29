@@ -954,14 +954,10 @@ static std::string GetRenderFormatName(ERenderFormat format)
 
 std::string CDVDPlayerVideo::GetStereoMode()
 {
-  std::string  stereo_mode;
+  std::string stereo_mode = CStereoscopicsManager::Get().GetStereoModeForPlayingVideo();
 
-  switch(CMediaSettings::Get().GetCurrentVideoSettings().m_StereoMode)
-  {
-    case RENDER_STEREO_MODE_SPLIT_VERTICAL:   stereo_mode = "left_right"; break;
-    case RENDER_STEREO_MODE_SPLIT_HORIZONTAL: stereo_mode = "top_bottom"; break;
-    default:                                  stereo_mode = m_hints.stereo_mode; break;
-  }
+  if (stereo_mode.empty() || stereo_mode == "mono")
+    stereo_mode = m_hints.stereo_mode;
 
   if(CMediaSettings::Get().GetCurrentVideoSettings().m_StereoInvert)
     stereo_mode = CStereoscopicsManager::Get().GetStereoModeInverted(stereo_mode);
@@ -978,7 +974,7 @@ int CDVDPlayerVideo::OutputPicture(const DVDVideoPicture* src, double pts)
   if(src->stereo_mode[0])
     m_hints.stereo_mode = src->stereo_mode;
 
-  /* figure out steremode expected based on user settings and hints */
+  /* figure out stereomode expected based on user settings and hints */
   unsigned int stereo_flags = GetStereoModeFlags(GetStereoMode());
 
 #ifdef HAS_VIDEO_PLAYBACK

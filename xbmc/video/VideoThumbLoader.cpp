@@ -32,7 +32,6 @@
 #include "GUIUserMessages.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/StereoscopicsManager.h"
-#include "rendering/RenderSystem.h"
 #include "TextureCache.h"
 #include "utils/log.h"
 #include "video/VideoInfoTag.h"
@@ -554,28 +553,9 @@ void CVideoThumbLoader::DetectAndAddMissingItemData(CFileItem &item)
 {
   if (item.m_bIsFolder) return;
 
-  std::string stereoMode;
-  // detect stereomode for videos
-  if (item.HasVideoInfoTag())
-    stereoMode = item.GetVideoInfoTag()->m_streamDetails.GetStereoMode();
-  if (stereoMode.empty())
+  if (!item.HasProperty("stereomode"))
   {
-    std::string path = item.GetPath();
-    if (item.IsVideoDb() && item.HasVideoInfoTag())
-      path = item.GetVideoInfoTag()->GetPath();
-
-    // check for custom stereomode setting in video settings
-    CVideoSettings itemVideoSettings;
-    m_videoDatabase->Open();
-    if (m_videoDatabase->GetVideoSettings(path, itemVideoSettings) && itemVideoSettings.m_StereoMode != RENDER_STEREO_MODE_OFF)
-      stereoMode = CStereoscopicsManager::Get().ConvertGuiStereoModeToString( (RENDER_STEREO_MODE) itemVideoSettings.m_StereoMode );
-    m_videoDatabase->Close();
-
-    // still empty, try grabbing from filename
-    // TODO: in case of too many false positives due to using the full path, extract the filename only using string utils
-    if (stereoMode.empty())
-      stereoMode = CStereoscopicsManager::Get().DetectStereoModeByString( path );
-  }
-  if (!stereoMode.empty())
+    std::string stereoMode = CStereoscopicsManager::Get().GetItemStereoMode(item);
     item.SetProperty("stereomode", CStereoscopicsManager::Get().NormalizeStereoMode(stereoMode));
+  }
 }

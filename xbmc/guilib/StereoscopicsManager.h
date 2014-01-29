@@ -31,6 +31,7 @@
 #include "rendering/RenderSystem.h"
 
 class CAction;
+class CFileItem;
 
 enum STEREOSCOPIC_PLAYBACK_MODE
 {
@@ -57,10 +58,13 @@ public:
   RENDER_STEREO_MODE GetStereoMode(void);
   void SetStereoModeByUser(const RENDER_STEREO_MODE &mode);
   void SetStereoMode(const RENDER_STEREO_MODE &mode);
+  std::string GetItemStereoMode(const std::string &itemPath);
+  std::string GetItemStereoMode(const CFileItem &item);
   RENDER_STEREO_MODE GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step = 1);
   std::string DetectStereoModeByString(const std::string &needle);
   RENDER_STEREO_MODE GetStereoModeByUserChoice(const std::string &heading = "");
-  RENDER_STEREO_MODE GetStereoModeOfPlayingVideo(void);
+  RENDER_STEREO_MODE GetGuiStereoModeForPlayingVideo(void);
+  std::string GetStereoModeForPlayingVideo(void);
   const std::string &GetLabelForStereoMode(const RENDER_STEREO_MODE &mode) const;
   RENDER_STEREO_MODE GetPreferredPlaybackMode(void);
   std::string GetStereoModeInverted(const std::string &mode);
