@@ -115,6 +115,7 @@ public:
   int GetVideoDuration(int idx = 0) const;
   void SetVideoDuration(int idx, const int duration);
   std::string GetStereoMode(int idx = 0) const;
+  void SetStereoMode(int idx, const std::string mode);
 
   std::string GetAudioCodec(int idx = 0) const;
   std::string GetAudioLanguage(int idx = 0) const;

@@ -60,6 +60,8 @@ public:
   void SetStereoMode(const RENDER_STEREO_MODE &mode);
   std::string GetItemStereoMode(const std::string &itemPath);
   std::string GetItemStereoMode(const CFileItem &item);
+  void SetItemStereoMode(const std::string &itemPath, const std::string &mode);
+  void SetItemStereoMode(CFileItem &item, const std::string &mode);
   RENDER_STEREO_MODE GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step = 1);
   std::string DetectStereoModeByString(const std::string &needle);
   RENDER_STEREO_MODE GetStereoModeByUserChoice(const std::string &heading = "");

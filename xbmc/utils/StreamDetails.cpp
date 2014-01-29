@@ -409,6 +409,13 @@ std::string CStreamDetails::GetStereoMode(int idx) const
     return "";
 }
 
+void CStreamDetails::SetStereoMode(int idx, const std::string mode)
+{
+  CStreamDetailVideo *item = (CStreamDetailVideo *)GetNthStream(CStreamDetail::VIDEO, idx);
+  if (item)
+    item->m_strStereoMode = mode;
+}
+
 std::string CStreamDetails::GetAudioCodec(int idx) const
 {
   CStreamDetailAudio *item = (CStreamDetailAudio *)GetNthStream(CStreamDetail::AUDIO, idx);

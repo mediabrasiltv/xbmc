@@ -222,6 +222,26 @@ std::string CStereoscopicsManager::GetItemStereoMode(const CFileItem &item)
   return stereoMode;
 }
 
+void CStereoscopicsManager::SetItemStereoMode(const std::string &itemPath, const std::string &mode)
+{
+  CFileItem item = CFileItem(itemPath, false);
+  SetItemStereoMode(item, mode);
+}
+
+void CStereoscopicsManager::SetItemStereoMode(CFileItem &item, const std::string &mode)
+{
+  if (!item.HasVideoInfoTag() || !item.GetVideoInfoTag()->HasStreamDetails())
+    return;
+
+  std::string itemPath = item.GetVideoInfoTag()->GetPath();
+  item.GetVideoInfoTag()->m_streamDetails.SetStereoMode(0, mode);
+
+  CVideoDatabase db;
+  db.Open();
+  db.SetStreamDetailsForFile(item.GetVideoInfoTag()->m_streamDetails, itemPath);
+  db.Close();
+}
+
 RENDER_STEREO_MODE CStereoscopicsManager::GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step)
 {
   RENDER_STEREO_MODE mode = currentMode;
