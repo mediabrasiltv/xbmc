@@ -28,6 +28,7 @@
 
 #include "Application.h"
 #include "ApplicationMessenger.h"
+//#include "cores/dvdplayer/DVDFileInfo.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogSelect.h"
 #include "FileItem.h"
@@ -192,7 +193,7 @@ std::string CStereoscopicsManager::GetItemStereoMode(const CFileItem &item)
 
   if (item.IsVideoDb() && item.HasVideoInfoTag())
     path = item.GetVideoInfoTag()->GetPath();
-
+/*
   // check for custom stereomode setting in video settings
   CVideoSettings itemVideoSettings;
   CVideoDatabase db;
@@ -205,7 +206,7 @@ std::string CStereoscopicsManager::GetItemStereoMode(const CFileItem &item)
       stereoMode = "top_bottom";
   }
   db.Close();
-
+*/
   // check stream details
   if (stereoMode.empty() && item.HasVideoInfoTag() && item.GetVideoInfoTag()->HasStreamDetails())
     stereoMode = item.GetVideoInfoTag()->m_streamDetails.GetStereoMode();
@@ -488,6 +489,32 @@ CAction CStereoscopicsManager::ConvertActionCommandToAction(const std::string &c
   return CAction(ACTION_NONE);
 }
 
+/*
+void CStereoscopicsManager::OnVideoSettingsChanged(CFileItem &item, CVideoSettings &videoSettings)
+{
+  if (item.HasVideoInfoTag())
+  {
+    std::string stereoMode = "";
+    if (videoSettings.m_StereoMode == RENDER_STEREO_MODE_MONO)
+      stereoMode = "mono";
+    else if (videoSettings.m_StereoMode == RENDER_STEREO_MODE_SPLIT_HORIZONTAL)
+      stereoMode = "left_right";
+    else if (videoSettings.m_StereoMode == RENDER_STEREO_MODE_SPLIT_VERTICAL)
+      stereoMode = "top_bottom";
+
+    if (stereoMode != item.GetVideoInfoTag()->m_streamDetails.GetStereoMode())
+    {
+      if (stereoMode == "")
+      {
+      //  CDVDFileInfo::GetFileStreamDetails(item, );
+      }
+      //if (videoSettings.m_StereoInvert)
+      //  stereoMode = GetStereoModeInverted(stereoMode);
+      SetItemStereoMode(item, stereoMode);
+    }
+  }
+}
+*/
 void CStereoscopicsManager::OnSettingChanged(const CSetting *setting)
 {
   if (setting == NULL)

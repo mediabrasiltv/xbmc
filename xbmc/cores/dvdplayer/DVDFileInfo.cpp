@@ -24,6 +24,7 @@
 #include "DVDFileInfo.h"
 #include "FileItem.h"
 #include "settings/AdvancedSettings.h"
+#include "guilib/StereoscopicsManager.h"
 #include "pictures/Picture.h"
 #include "video/VideoInfoTag.h"
 #include "filesystem/StackDirectory.h"
@@ -397,6 +398,10 @@ bool CDVDFileInfo::DemuxerToStreamDetails(CDVDInputStream *pInputStream, CDVDDem
       pDemux->GetStreamCodecName(iStream, p->m_strCodec);
       p->m_iDuration = pDemux->GetStreamLength();
       p->m_strStereoMode = ((CDemuxStreamVideo *)stream)->stereo_mode;
+
+      // try to detect stereomode from other sources if demuxer failed
+      if (p->m_strStereoMode.empty() && !path.empty())
+        p->m_strStereoMode = CStereoscopicsManager::Get().GetItemStereoMode(path);
 
       // stack handling
       if (URIUtils::IsStack(path))
