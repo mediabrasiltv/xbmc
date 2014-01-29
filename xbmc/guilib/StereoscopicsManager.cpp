@@ -40,11 +40,14 @@
 #include "settings/lib/ISettingCallback.h"
 #include "settings/lib/Setting.h"
 #include "settings/Settings.h"
+#include "settings/VideoSettings.h"
 #include "rendering/RenderSystem.h"
 #include "utils/log.h"
 #include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 #include "URL.h"
+#include "video/VideoInfoTag.h"
+#include "video/VideoDatabase.h"
 #include "windowing/WindowingFactory.h"
 
 
@@ -155,6 +158,49 @@ void CStereoscopicsManager::SetStereoMode(const RENDER_STEREO_MODE &mode)
   }
 }
 
+std::string CStereoscopicsManager::GetItemStereoMode(const std::string &itemPath)
+{
+  CFileItem item = CFileItem(itemPath, false);
+  return GetItemStereoMode(item);
+}
+
+std::string CStereoscopicsManager::GetItemStereoMode(const CFileItem &item)
+{
+  std::string stereoMode;
+  std::string path = item.GetPath();
+
+  if (item.IsVideoDb() && item.HasVideoInfoTag())
+    path = item.GetVideoInfoTag()->GetPath();
+
+  // check for custom stereomode setting in video settings
+  CVideoSettings itemVideoSettings;
+  CVideoDatabase db;
+  db.Open();
+  if (db.GetVideoSettings(path, itemVideoSettings) && itemVideoSettings.m_StereoMode != RENDER_STEREO_MODE_OFF)
+  {
+    if (itemVideoSettings.m_StereoMode == RENDER_STEREO_MODE_SPLIT_HORIZONTAL)
+      stereoMode = "left_right";
+    else if (itemVideoSettings.m_StereoMode == RENDER_STEREO_MODE_SPLIT_VERTICAL)
+      stereoMode = "top_bottom";
+  }
+  db.Close();
+
+  // check stream details
+  if (stereoMode.empty() && item.HasVideoInfoTag() && item.GetVideoInfoTag()->HasStreamDetails())
+    stereoMode = item.GetVideoInfoTag()->m_streamDetails.GetStereoMode();
+
+  // still empty, try grabbing from filename
+  // TODO: in case of too many false positives due to using the full path, extract the filename only using string utils
+  if (stereoMode.empty())
+    stereoMode = DetectStereoModeByString( path );
+
+  // still empty? Assume it's not stereoscopic
+  if (stereoMode.empty())
+    stereoMode = "mono";
+
+  return stereoMode;
+}
+
 RENDER_STEREO_MODE CStereoscopicsManager::GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step)
 {
   RENDER_STEREO_MODE mode = currentMode;
@@ -210,7 +256,7 @@ RENDER_STEREO_MODE CStereoscopicsManager::GetStereoModeByUserChoice(const CStdSt
   RENDER_STEREO_MODE mode = GetStereoMode();
   // if no stereo mode is set already, suggest mode of current video by preselecting it
   if (mode == RENDER_STEREO_MODE_OFF && g_infoManager.EvaluateBool("videoplayer.isstereoscopic"))
-    mode = GetStereoModeOfPlayingVideo();
+    mode = GetGuiStereoModeForPlayingVideo();
 
   CGUIDialogSelect* pDlgSelect = (CGUIDialogSelect*)g_windowManager.GetWindow(WINDOW_DIALOG_SELECT);
   pDlgSelect->Reset();
@@ -245,19 +291,30 @@ RENDER_STEREO_MODE CStereoscopicsManager::GetStereoModeByUserChoice(const CStdSt
   return mode;
 }
 
-RENDER_STEREO_MODE CStereoscopicsManager::GetStereoModeOfPlayingVideo(void)
+std::string CStereoscopicsManager::GetStereoModeForPlayingVideo()
+{
+  std::string videoMode;
+
+  CFileItem currentItem(g_application.CurrentFileItem());
+  if (currentItem.HasVideoInfoTag())
+    videoMode = GetItemStereoMode(currentItem);
+
+  return videoMode;
+}
+
+RENDER_STEREO_MODE CStereoscopicsManager::GetGuiStereoModeForPlayingVideo()
 {
   RENDER_STEREO_MODE mode = RENDER_STEREO_MODE_OFF;
+  std::string videoMode = GetStereoModeForPlayingVideo();
 
-  CStdString playerMode = g_infoManager.GetLabel(VIDEOPLAYER_STEREOSCOPIC_MODE);
-  if (!playerMode.empty())
+  if (!videoMode.empty())
   {
-    int convertedMode = ConvertVideoToGuiStereoMode(playerMode);
+    int convertedMode = ConvertVideoToGuiStereoMode(videoMode);
     if (convertedMode > -1)
       mode = (RENDER_STEREO_MODE) convertedMode;
+    CLog::Log(LOGDEBUG, "StereoscopicsManager: autodetected GUI stereo mode for video mode %s is: %s", videoMode.c_str(), GetLabelForStereoMode(mode).c_str());
   }
 
-  CLog::Log(LOGDEBUG, "StereoscopicsManager: autodetected GUI stereo mode for movie mode %s is: %s", playerMode.c_str(), GetLabelForStereoMode(mode).c_str());
   return mode;
 }
 
@@ -273,7 +330,7 @@ RENDER_STEREO_MODE CStereoscopicsManager::GetPreferredPlaybackMode(void)
   if (preferredMode == RENDER_STEREO_MODE_AUTO) // automatic mode, detect by movie
   {
     if (g_infoManager.EvaluateBool("videoplayer.isstereoscopic"))
-      playbackMode = GetStereoModeOfPlayingVideo();
+      playbackMode = GetGuiStereoModeForPlayingVideo();
     else if (playbackMode == RENDER_STEREO_MODE_OFF)
       playbackMode = GetNextSupportedStereoMode(RENDER_STEREO_MODE_OFF);
   }
@@ -504,7 +561,7 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
       pDlgSelect->Reset();
       pDlgSelect->SetHeading(g_localizeStrings.Get(36527).c_str());
 
-      RENDER_STEREO_MODE playing = GetStereoModeOfPlayingVideo();
+      RENDER_STEREO_MODE playing = GetGuiStereoModeForPlayingVideo();
 
       int idx_playing   = -1
         , idx_mono      = -1;

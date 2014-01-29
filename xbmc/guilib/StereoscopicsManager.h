@@ -31,6 +31,7 @@
 #include "rendering/RenderSystem.h"
 
 class CAction;
+class CFileItem;
 
 class CStereoscopicsManager : public ISettingCallback,
                               public IMsgTargetCallback
@@ -45,12 +46,15 @@ public:
   static CStereoscopicsManager& Get(void);
 
   void Initialize(void);
-  void SetStereoMode(const RENDER_STEREO_MODE &mode);
   RENDER_STEREO_MODE GetStereoMode(void);
+  void SetStereoMode(const RENDER_STEREO_MODE &mode);
+  std::string GetItemStereoMode(const std::string &itemPath);
+  std::string GetItemStereoMode(const CFileItem &item);
   RENDER_STEREO_MODE GetNextSupportedStereoMode(const RENDER_STEREO_MODE &currentMode, int step = 1);
   std::string DetectStereoModeByString(const std::string &needle);
   RENDER_STEREO_MODE GetStereoModeByUserChoice(const CStdString &heading = "");
-  RENDER_STEREO_MODE GetStereoModeOfPlayingVideo(void);
+  RENDER_STEREO_MODE GetGuiStereoModeForPlayingVideo(void);
+  std::string GetStereoModeForPlayingVideo(void);
   CStdString GetLabelForStereoMode(const RENDER_STEREO_MODE &mode);
   RENDER_STEREO_MODE GetPreferredPlaybackMode(void);
   std::string GetStereoModeInverted(const std::string &mode);
