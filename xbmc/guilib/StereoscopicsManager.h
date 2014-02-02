@@ -48,7 +48,7 @@ public:
 
   void Initialize(void);
   RENDER_STEREO_MODE GetStereoMode(void);
-  void SetStereoMode(const RENDER_STEREO_MODE &mode);
+  void SetStereoMode(const RENDER_STEREO_MODE &mode, const bool byUserInteraction = false);
   std::string GetItemStereoMode(const std::string &itemPath);
   std::string GetItemStereoMode(const CFileItem &item);
   void SetItemStereoMode(const std::string &itemPath, const std::string &mode);
@@ -93,4 +93,5 @@ private:
   void OnPlaybackStopped(void);
 
   RENDER_STEREO_MODE m_lastStereoMode;
+  bool m_stereoModeSetByUser;
 };

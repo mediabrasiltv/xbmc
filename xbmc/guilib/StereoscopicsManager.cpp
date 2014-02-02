@@ -122,6 +122,7 @@ static const struct StrStereoModeMap StereoModeInvertMap[] =
 CStereoscopicsManager::CStereoscopicsManager(void)
 {
   m_lastStereoMode = RENDER_STEREO_MODE_OFF;
+  m_stereoModeSetByUser = false;
 }
 
 CStereoscopicsManager::~CStereoscopicsManager(void)
@@ -146,7 +147,7 @@ RENDER_STEREO_MODE CStereoscopicsManager::GetStereoMode(void)
   return (RENDER_STEREO_MODE) CSettings::Get().GetInt("videoscreen.stereoscopicmode");
 }
 
-void CStereoscopicsManager::SetStereoMode(const RENDER_STEREO_MODE &mode)
+void CStereoscopicsManager::SetStereoMode(const RENDER_STEREO_MODE &mode, bool byUserInteraction)
 {
   RENDER_STEREO_MODE currentMode = GetStereoMode();
   if (mode != currentMode && mode >= RENDER_STEREO_MODE_OFF)
@@ -154,6 +155,7 @@ void CStereoscopicsManager::SetStereoMode(const RENDER_STEREO_MODE &mode)
     if(!g_Windowing.SupportsStereo(mode))
       return;
 
+    m_stereoModeSetByUser = byUserInteraction;
     m_lastStereoMode = currentMode;
     CSettings::Get().SetInt("videoscreen.stereoscopicmode", mode);
   }
@@ -515,12 +517,12 @@ bool CStereoscopicsManager::OnAction(const CAction &action)
 
   if (action.GetID() == ACTION_STEREOMODE_NEXT)
   {
-    SetStereoMode(GetNextSupportedStereoMode(mode));
+    SetStereoMode(GetNextSupportedStereoMode(mode), true);
     return true;
   }
   else if (action.GetID() == ACTION_STEREOMODE_PREVIOUS)
   {
-    SetStereoMode(GetNextSupportedStereoMode(mode, RENDER_STEREO_MODE_COUNT - 1));
+    SetStereoMode(GetNextSupportedStereoMode(mode, RENDER_STEREO_MODE_COUNT - 1), true);
     return true;
   }
   else if (action.GetID() == ACTION_STEREOMODE_TOGGLE)
@@ -530,17 +532,17 @@ bool CStereoscopicsManager::OnAction(const CAction &action)
       RENDER_STEREO_MODE targetMode = m_lastStereoMode;
       if (targetMode == RENDER_STEREO_MODE_OFF)
         targetMode = GetPreferredPlaybackMode();
-      SetStereoMode(targetMode);
+      SetStereoMode(targetMode, m_stereoModeSetByUser);
     }
     else
     {
-      SetStereoMode(RENDER_STEREO_MODE_OFF);
+      SetStereoMode(RENDER_STEREO_MODE_OFF, m_stereoModeSetByUser);
     }
     return true;
   }
   else if (action.GetID() == ACTION_STEREOMODE_SELECT)
   {
-    SetStereoMode(GetStereoModeByUserChoice());
+    SetStereoMode(GetStereoModeByUserChoice(), true);
     return true;
   }
   else if (action.GetID() == ACTION_STEREOMODE_TOMONO)
@@ -550,18 +552,18 @@ bool CStereoscopicsManager::OnAction(const CAction &action)
       RENDER_STEREO_MODE targetMode = m_lastStereoMode;
       if (targetMode == RENDER_STEREO_MODE_OFF)
         targetMode = GetPreferredPlaybackMode();
-      SetStereoMode(targetMode);
+      SetStereoMode(targetMode, true);
     }
     else
     {
-      SetStereoMode(RENDER_STEREO_MODE_MONO);
+      SetStereoMode(RENDER_STEREO_MODE_MONO, true);
     }
   }
   else if (action.GetID() == ACTION_STEREOMODE_SET)
   {
     int stereoMode = ConvertStringToGuiStereoMode(action.GetName());
     if (stereoMode > -1)
-      SetStereoMode( (RENDER_STEREO_MODE) stereoMode);
+      SetStereoMode( (RENDER_STEREO_MODE) stereoMode, true);
   }
 
   return false;
@@ -583,11 +585,12 @@ void CStereoscopicsManager::ApplyStereoMode(const RENDER_STEREO_MODE &mode, bool
 void CStereoscopicsManager::OnPlaybackStarted(void)
 {
   RENDER_STEREO_MODE mode = GetStereoMode();
+  bool bAutodetectPreferred = CSettings::Get().GetInt("videoscreen.preferedstereoscopicmode") == RENDER_STEREO_MODE_AUTO;
 
   if (!g_infoManager.EvaluateBool("videoplayer.isstereoscopic"))
   {
     // exit stereo mode if started item is not stereoscopic but we're currently in a stereo mode
-    if (mode != RENDER_STEREO_MODE_OFF)
+    if (mode != RENDER_STEREO_MODE_OFF && !bAutodetectPreferred)
       SetStereoMode(RENDER_STEREO_MODE_OFF);
     return;
   }
@@ -615,7 +618,12 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
         
 
       // add choices
-      int idx_preferred = pDlgSelect->Add( g_localizeStrings.Get(36530)
+      CStdString labelPreferred;
+      if (bAutodetectPreferred)
+        labelPreferred = ": " + g_localizeStrings.Get(36532);
+
+      int idx_preferred = pDlgSelect->Add( g_localizeStrings.Get(36530) // preferred
+                                     + labelPreferred
                                      + " ("
                                      + GetLabelForStereoMode(preferred)
                                      + ")");
@@ -624,7 +632,7 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
         idx_mono = pDlgSelect->Add( g_localizeStrings.Get(36529) ); // mono / 2d
 
 
-      if(playing != RENDER_STEREO_MODE_OFF && playing != preferred && g_Windowing.SupportsStereo(playing))
+      if(playing != RENDER_STEREO_MODE_OFF && !bAutodetectPreferred && g_Windowing.SupportsStereo(playing)) // same as movie
         idx_playing = pDlgSelect->Add( g_localizeStrings.Get(36532)
                                     + " ("
                                     + GetLabelForStereoMode(playing)
@@ -642,14 +650,15 @@ void CStereoscopicsManager::OnPlaybackStarted(void)
         else if (iItem == idx_playing)   mode = playing;
         else if (iItem == idx_select)    mode = GetStereoModeByUserChoice();
 
-        SetStereoMode(mode);
+        SetStereoMode(mode, true);
       }
 
       CApplicationMessenger::Get().MediaUnPause();
     }
     break;
   case 1: // Stereoscopic
-    SetStereoMode( preferred );
+    if (!m_stereoModeSetByUser)
+      SetStereoMode( preferred );
     break;
   default:
     break;
