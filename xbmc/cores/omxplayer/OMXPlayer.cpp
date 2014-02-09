@@ -4516,6 +4516,8 @@ bool COMXPlayer::GetStreamDetails(CStreamDetails &details)
       int64_t duration = GetTotalTime() / 1000;
       if (duration > 0)
         ((CStreamDetailVideo*)details.GetNthStream(CStreamDetail::VIDEO,0))->m_iDuration = duration;
+
+      details.SetStereoMode(m_omxPlayerVideo.GetStereoMode());
     }
     return result;
   }
