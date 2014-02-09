@@ -3006,9 +3006,6 @@ bool CDVDPlayer::OpenVideoStream(int iStream, int source, bool reset)
   if(pMenus && pMenus->IsInMenu())
     hint.stills = true;
 
-  if (hint.stereo_mode.empty())
-    hint.stereo_mode = CStereoscopicsManager::Get().DetectStereoModeByString(m_filename);
-
   if(m_CurrentVideo.id    < 0
   || m_CurrentVideo.hint != hint)
   {
