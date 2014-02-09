@@ -291,6 +291,30 @@ bool CDVDFileInfo::ExtractThumb(const std::string &strPath,
             }
 
             delete [] pOutBuf;
+
+            // fix wrong resolution and aspect ratio of stereoscopic videos with wrong or broken metadata
+            if (pStreamDetails)
+            {
+              CStreamDetails details = *pStreamDetails;
+              std::string stereoMode = details.GetStereoMode();
+              if (stereoMode.empty())
+                stereoMode = CStereoscopicsManager::Get().GetItemStereoMode(strPath);
+
+              if (!stereoMode.empty())
+              {
+                details.SetStereoMode(0, stereoMode);
+                CStreamDetailVideo videoStream = *(CStreamDetailVideo*)details.GetNthStream(CStreamDetail::VIDEO,0);
+                float fAspect = (float)picture.iDisplayWidth / (float)picture.iDisplayHeight;
+                // fix resolution for FullSBS/OU
+                if ((stereoMode == "left_right" || stereoMode == "right_left") && fAspect <= 3.5556f /*32:9*/ && fAspect > 2.75f /*ultra panavision 70*/)
+                  videoStream.m_iWidth = picture.iDisplayWidth / 2;
+                if ((stereoMode == "top_bottom" || stereoMode == "bottom_top") && fAspect <= 0.8889f /*16:18*/ && fAspect > 0.5625f /*9:16*/ )
+                  videoStream.m_iHeight = picture.iDisplayHeight / 2;
+
+                if (!hint.forced_aspect)
+                  videoStream.m_fAspect = videoStream.m_iWidth / videoStream.m_iHeight;
+              }
+            }
           }
         }
         else

@@ -1167,6 +1167,8 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int iId)
         st->iWidth = pStream->codec->width;
         st->iHeight = pStream->codec->height;
         st->fAspect = SelectAspect(pStream, &st->bForcedAspect) * pStream->codec->width / pStream->codec->height;
+        if (st->fAspect == 0.0f)
+          st->fAspect = (float)st->iWidth / st->iHeight;
         st->iOrientation = 0;
         st->iBitsPerPixel = pStream->codec->bits_per_coded_sample;
 
@@ -1181,29 +1183,6 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int iId)
           stereoMode = GetStereoModeFromMetadata(m_pFormatContext->metadata);
         if (!stereoMode.empty())
           st->stereo_mode = stereoMode;
-
-        // fix resolution and aspect in case of SBS/OU movies with wrong tags
-        if (!st->stereo_mode.empty())
-        {
-          float fAspect = (float)st->iWidth / st->iHeight;
-          // fix resolution for FullSBS/OU
-          if ((st->stereo_mode == "left_right" || st->stereo_mode == "right_left") && fAspect <= 3.5556f /*32:9*/ && fAspect > 2.75f /*ultra panavision 70*/)
-          {
-            st->iWidth = st->iWidth / 2;
-            if (!st->bForcedAspect)
-              st->fAspect = 0.0f;
-          }
-          if ((st->stereo_mode == "top_bottom" || st->stereo_mode == "bottom_top") && fAspect <= 0.8889f /*16:18*/ && fAspect > 0.5625f /*9:16*/ )
-          {
-            st->iHeight = st->iHeight / 2;
-            if (!st->bForcedAspect)
-              st->fAspect = 0.0f;
-          }
-        }
-
-        // calculate aspect if missing
-        if (st->fAspect == 0.0f)
-          st->fAspect = (float)st->iWidth / st->iHeight;
 
         if ( m_pInput->IsStreamType(DVDSTREAM_TYPE_DVD) )
         {
