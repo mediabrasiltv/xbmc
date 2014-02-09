@@ -4468,6 +4468,8 @@ bool CDVDPlayer::GetStreamDetails(CStreamDetails &details)
       int64_t duration = GetTotalTime() / 1000;
       if (duration > 0)
         ((CStreamDetailVideo*)details.GetNthStream(CStreamDetail::VIDEO,0))->m_iDuration = (int) duration;
+
+      details.SetStereoMode(0, m_dvdPlayerVideo.GetStereoMode());
     }
     return result;
   }
