@@ -912,27 +912,6 @@ void CGUIWindowVideoNav::GetContextButtons(int itemNumber, CContextButtons &butt
       // can we update the database?
       if (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser)
       {
-        if (!item->IsPlugin() && !item->IsScript() && !item->IsLiveTV() && !item->IsAddonsPath() &&
-            item->GetPath() != "sources://video/" &&
-            item->GetPath() != "special://videoplaylists/" &&
-            !StringUtils::StartsWith(item->GetPath(), "newsmartplaylist://") &&
-            !StringUtils::StartsWith(item->GetPath(), "newplaylist://") &&
-            !StringUtils::StartsWith(item->GetPath(), "newtag://"))
-        {
-          if (item->m_bIsFolder)
-          {
-            // Have both options for folders since we don't know whether all childs are watched/unwatched
-            buttons.Add(CONTEXT_BUTTON_MARK_UNWATCHED, 16104); //Mark as UnWatched
-            buttons.Add(CONTEXT_BUTTON_MARK_WATCHED, 16103);   //Mark as Watched
-          }
-          else
-          {
-            if (item->GetOverlayImage() == "OverlayWatched.png")
-              buttons.Add(CONTEXT_BUTTON_MARK_UNWATCHED, 16104); //Mark as UnWatched
-            else
-              buttons.Add(CONTEXT_BUTTON_MARK_WATCHED, 16103);   //Mark as Watched
-          }
-        }
         if (!g_application.IsVideoScanning() && item->IsVideoDb() && item->HasVideoInfoTag() &&
            (item->GetVideoInfoTag()->m_type == MediaTypeMovie ||          // movies
             item->GetVideoInfoTag()->m_type == MediaTypeTvShow ||         // tvshows
