@@ -984,16 +984,6 @@
 						<include>ButtonInfoDialogsCommonValues</include>
 						<label>206</label>
 					</control>
-					<control type="button" id="6">
-						<description>Refresh</description>
-						<include>ButtonInfoDialogsCommonValues</include>
-						<label>184</label>
-					</control>
-					<control type="button" id="10">
-						<description>Get Thumb</description>
-						<include>ButtonInfoDialogsCommonValues</include>
-						<label>13511</label>
-					</control>
 					<control type="button" id="11">
 						<description>Play Trailer</description>
 						<include>ButtonInfoDialogsCommonValues</include>
@@ -1011,6 +1001,11 @@
 						<description>Set my rating</description>
 						<include>ButtonInfoDialogsCommonValues</include>
 						<label>38023</label>
+					</control>
+					<control type="button" id="14">
+						<description>Manage</description>
+						<include>ButtonInfoDialogsCommonValues</include>
+						<label>16106</label>
 					</control>
 					<control type="button" id="100">
 						<description>Fetch TvTunes stuff</description>

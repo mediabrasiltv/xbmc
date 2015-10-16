@@ -66,14 +66,12 @@ using namespace KODI::MESSAGING;
 #define CONTROL_IMAGE                3
 #define CONTROL_TEXTAREA             4
 #define CONTROL_BTN_TRACKS           5
-#define CONTROL_BTN_REFRESH          6
 #define CONTROL_BTN_USERRATING       7
 #define CONTROL_BTN_PLAY             8
 #define CONTROL_BTN_RESUME           9
-#define CONTROL_BTN_GET_THUMB       10
 #define CONTROL_BTN_PLAY_TRAILER    11
-#define CONTROL_BTN_GET_FANART      12
 #define CONTROL_BTN_DIRECTOR        13
+#define CONTROL_BTN_EDIT            14
 
 #define CONTROL_LIST                50
 
@@ -125,29 +123,15 @@ bool CGUIDialogVideoInfo::OnMessage(CGUIMessage& message)
   case GUI_MSG_CLICKED:
     {
       int iControl = message.GetSenderId();
-      if (iControl == CONTROL_BTN_REFRESH)
+      if (iControl == CONTROL_BTN_EDIT)
       {
-        if (m_movieItem->GetVideoInfoTag()->m_type == MediaTypeTvShow)
+        CONTEXT_BUTTON ret = (CONTEXT_BUTTON)CGUIDialogVideoInfo::ManageVideoItem(m_movieItem);
+        if (ret >= 0)
         {
-          bool bCanceled=false;
-          if (CGUIDialogYesNo::ShowAndGetInput(CVariant{20377}, CVariant{20378}, bCanceled, CVariant{ "" }, CVariant{ "" }, CGUIDialogYesNo::NO_TIMEOUT))
-          {
-            m_bRefreshAll = true;
-            CVideoDatabase db;
-            if (db.Open())
-            {
-              db.SetPathHash(m_movieItem->GetVideoInfoTag()->m_strPath,"");
-              db.Close();
-            }
-          }
-          else
-            m_bRefreshAll = false;
-
-          if (bCanceled)
-            return false;
+          if (ret == CONTEXT_BUTTON_DELETE)
+            Close();
+          Update();
         }
-        m_bRefresh = true;
-        Close();
         return true;
       }
       else if (iControl == CONTROL_BTN_TRACKS)
@@ -167,17 +151,9 @@ bool CGUIDialogVideoInfo::OnMessage(CGUIMessage& message)
       {
         Play(true);
       }
-      else if (iControl == CONTROL_BTN_GET_THUMB)
-      {
-        OnGetArt();
-      }
       else if (iControl == CONTROL_BTN_PLAY_TRAILER)
       {
         PlayTrailer();
-      }
-      else if (iControl == CONTROL_BTN_GET_FANART)
-      {
-        OnGetFanart();
       }
       else if (iControl == CONTROL_BTN_DIRECTOR)
       {
@@ -227,15 +203,7 @@ void CGUIDialogVideoInfo::OnInitWindow()
   m_hasUpdatedUserrating = false;
   m_bViewReview = true;
 
-  CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_REFRESH, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && !StringUtils::StartsWithNoCase(m_movieItem->GetVideoInfoTag()->m_strIMDBNumber, "xx"));
-  CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_GET_THUMB, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && !StringUtils::StartsWithNoCase(m_movieItem->GetVideoInfoTag()->m_strIMDBNumber.c_str() + 2, "plugin"));
-
-  VIDEODB_CONTENT_TYPE type = (VIDEODB_CONTENT_TYPE)m_movieItem->GetVideoContentType();
-  if (type == VIDEODB_CONTENT_TVSHOWS || type == VIDEODB_CONTENT_MOVIES)
-    CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_GET_FANART, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && !StringUtils::StartsWithNoCase(m_movieItem->GetVideoInfoTag()->m_strIMDBNumber.c_str() + 2, "plugin"));
-  else
-    CONTROL_DISABLE(CONTROL_BTN_GET_FANART);
-
+  CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_EDIT, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && !StringUtils::StartsWithNoCase(m_movieItem->GetVideoInfoTag()->m_strIMDBNumber, "xx"));
   Update();
 
   CGUIDialog::OnInitWindow();
