@@ -58,7 +58,7 @@ bool CVideoLibraryRefreshingJob::operator==(const CJob* job) const
   if (refreshingJob == nullptr)
     return false;
 
-  return m_item->GetPath() == refreshingJob->m_item->GetPath();
+  return m_item->GetPlayablePath() == refreshingJob->m_item->GetPlayablePath();
 }
 
 bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
@@ -68,7 +68,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
 
   // determine the scraper for the item's path
   VIDEO::SScanSettings scanSettings;
-  ADDON::ScraperPtr scraper = db.GetScraperForPath(m_item->GetPath(), scanSettings);
+  ADDON::ScraperPtr scraper = db.GetScraperForPath(m_item->GetPlayablePath(), scanSettings);
   if (scraper == nullptr)
     return false;
 
@@ -227,7 +227,7 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
     m_item->ClearArt();
 
     // put together the list of items to refresh
-    std::string path = m_item->GetPath();
+    std::string path = m_item->GetPlayablePath();
     CFileItemList items;
     if (m_item->HasVideoInfoTag() && m_item->GetVideoInfoTag()->m_iDbId > 0)
     {
@@ -246,9 +246,6 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
       // otherwise just add a copy of the item
       else
         items.Add(CFileItemPtr(new CFileItem(*m_item->GetVideoInfoTag())));
-
-      // update the path to the real path (instead of a videodb:// one)
-      path = m_item->GetVideoInfoTag()->m_strPath;
     }
     else
       items.Add(CFileItemPtr(new CFileItem(*m_item)));
@@ -306,16 +303,16 @@ bool CVideoLibraryRefreshingJob::Work(CVideoDatabase &db)
 
     // retrieve the updated information from the database
     if (scraper->Content() == CONTENT_MOVIES)
-      db.GetMovieInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+      db.GetMovieInfo(m_item->GetPlayablePath(), *m_item->GetVideoInfoTag());
     else if (scraper->Content() == CONTENT_MUSICVIDEOS)
-      db.GetMusicVideoInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+      db.GetMusicVideoInfo(m_item->GetPlayablePath(), *m_item->GetVideoInfoTag());
     else if (scraper->Content() == CONTENT_TVSHOWS)
     {
       // update tvshow info to get updated episode numbers
       if (m_item->m_bIsFolder)
-        db.GetTvShowInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+        db.GetTvShowInfo(m_item->GetPlayablePath(), *m_item->GetVideoInfoTag());
       else
-        db.GetEpisodeInfo(m_item->GetPath(), *m_item->GetVideoInfoTag());
+        db.GetEpisodeInfo(m_item->GetPlayablePath(), *m_item->GetVideoInfoTag());
     }
 
     // we're finally done

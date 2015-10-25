@@ -125,6 +125,11 @@ public:
   void SetURL(const CURL& url);
   bool IsURL(const CURL& url) const;
   const std::string &GetPath() const { return m_strPath; };
+  const std::string &GetPlayablePath() const {
+    if (!m_playablePath.empty())
+      return m_playablePath;
+    return GetPath();
+  };
   void SetPath(const std::string &path) { m_strPath = path; };
   bool IsPath(const std::string& path) const;
 
@@ -508,6 +513,7 @@ private:
   void Initialize();
 
   std::string m_strPath;            ///< complete path to item
+  std::string m_playablePath;
 
   SortSpecial m_specialSort;
   bool m_bIsParentFolder;

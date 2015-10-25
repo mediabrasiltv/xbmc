@@ -361,11 +361,13 @@ const CFileItem& CFileItem::operator=(const CFileItem& item)
       *m_videoInfoTag = *item.m_videoInfoTag;
     else
       m_videoInfoTag = new CVideoInfoTag(*item.m_videoInfoTag);
+    m_playablePath = m_videoInfoTag->GetPath();
   }
   else
   {
     delete m_videoInfoTag;
     m_videoInfoTag = NULL;
+    m_playablePath.clear();
   }
 
   if (item.m_pictureInfoTag)
@@ -443,6 +445,7 @@ void CFileItem::Reset()
   m_strDVDLabel.clear();
   m_strTitle.clear();
   m_strPath.clear();
+  m_playablePath.clear();
   m_dateTime.Reset();
   m_strLockCode.clear();
   m_mimetype.clear();
@@ -1425,16 +1428,13 @@ void CFileItem::SetFromVideoInfoTag(const CVideoInfoTag &video)
 {
   if (!video.m_strTitle.empty())
     SetLabel(video.m_strTitle);
-  if (video.m_strFileNameAndPath.empty())
+  m_strPath = video.GetPath();
+  m_playablePath = m_strPath;
+  m_bIsFolder = false;
+  if (!URIUtils::HasExtension(m_strPath))
   {
-    m_strPath = video.m_strPath;
     URIUtils::AddSlashAtEnd(m_strPath);
     m_bIsFolder = true;
-  }
-  else
-  {
-    m_strPath = video.m_strFileNameAndPath;
-    m_bIsFolder = false;
   }
   
   *GetVideoInfoTag() = video;
