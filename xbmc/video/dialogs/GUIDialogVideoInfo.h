@@ -48,6 +48,7 @@ public:
   static void AddItemPathToFileBrowserSources(VECSOURCES &sources, const CFileItem &item);
 
   static int ManageVideoItem(const CFileItemPtr &item);
+  static bool RefreshItem(const CFileItemPtr &pItem);
   static bool UpdateVideoItemTitle(const CFileItemPtr &pItem);
   static bool CanDeleteVideoItem(const CFileItemPtr &item);
   static bool DeleteVideoItemFromDatabase(const CFileItemPtr &item, bool unavailable = false);

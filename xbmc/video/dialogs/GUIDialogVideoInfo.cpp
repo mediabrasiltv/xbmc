@@ -125,11 +125,12 @@ bool CGUIDialogVideoInfo::OnMessage(CGUIMessage& message)
       int iControl = message.GetSenderId();
       if (iControl == CONTROL_BTN_EDIT)
       {
-        CONTEXT_BUTTON ret = (CONTEXT_BUTTON)CGUIDialogVideoInfo::ManageVideoItem(m_movieItem);
+        CONTEXT_BUTTON ret = (CONTEXT_BUTTON)ManageVideoItem(m_movieItem);
         if (ret >= 0)
         {
           if (ret == CONTEXT_BUTTON_DELETE)
             Close();
+
           Update();
         }
         return true;
@@ -203,7 +204,7 @@ void CGUIDialogVideoInfo::OnInitWindow()
   m_hasUpdatedUserrating = false;
   m_bViewReview = true;
 
-  CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_EDIT, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && !StringUtils::StartsWithNoCase(m_movieItem->GetVideoInfoTag()->m_strIMDBNumber, "xx"));
+  CONTROL_ENABLE_ON_CONDITION(CONTROL_BTN_EDIT, (CProfilesManager::GetInstance().GetCurrentProfile().canWriteDatabases() || g_passwordManager.bMasterUser) && m_movieItem->IsVideo());
   Update();
 
   CGUIDialog::OnInitWindow();
@@ -934,10 +935,13 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
 
   CContextButtons buttons;
   if (type == MediaTypeMovie || type == MediaTypeVideoCollection ||
-      type == MediaTypeTvShow || type == MediaTypeEpisode ||
-     (type == MediaTypeSeason && item->GetVideoInfoTag()->m_iSeason > 0) ||  // seasons without "all seasons" and "specials"
-      type == MediaTypeMusicVideo)
+    type == MediaTypeTvShow || type == MediaTypeEpisode ||
+    (type == MediaTypeSeason && item->GetVideoInfoTag()->m_iSeason > 0) ||  // seasons without "all seasons" and "specials"
+    type == MediaTypeMusicVideo)
+  {
     buttons.Add(CONTEXT_BUTTON_EDIT, 16105);
+    buttons.Add(CONTEXT_BUTTON_REFRESH, 184);
+  }
 
   if (type == MediaTypeMovie || type == MediaTypeTvShow)
     buttons.Add(CONTEXT_BUTTON_EDIT_SORTTITLE, 16107);
@@ -961,9 +965,10 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
     // only show link/unlink if there are tvshows available
     if (database.HasContent(VIDEODB_CONTENT_TVSHOWS))
     {
-      buttons.Add(CONTEXT_BUTTON_LINK_MOVIE, 20384);
       if (database.IsLinkedToTvshow(dbId))
         buttons.Add(CONTEXT_BUTTON_UNLINK_MOVIE, 20385);
+      else
+        buttons.Add(CONTEXT_BUTTON_LINK_MOVIE, 20384);
     }
 
     // set or change movie set the movie belongs to
@@ -976,14 +981,14 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
 
   // movie sets
   if (item->m_bIsFolder && type == MediaTypeVideoCollection)
-  {
-    buttons.Add(CONTEXT_BUTTON_SET_MOVIESET_ART, 13511);
     buttons.Add(CONTEXT_BUTTON_MOVIESET_ADD_REMOVE_ITEMS, 20465);
-  }
 
-  // seasons
-  if (item->m_bIsFolder && type == MediaTypeSeason)
-    buttons.Add(CONTEXT_BUTTON_SET_SEASON_ART, 13511);
+  // artwork
+  if (type == MediaTypeMovie || type == MediaTypeVideoCollection || type == MediaTypeTvShow || 
+    (type == MediaTypeSeason && item->GetVideoInfoTag()->m_iSeason > 0))  // seasons without "all seasons" and "specials"
+  {
+    buttons.Add(CONTEXT_BUTTON_SET_ART, 13511);
+  }
 
   // tags
   if (item->m_bIsFolder && type == "tag")
@@ -1042,8 +1047,7 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
         result = DeleteVideoItem(item);
         break;
 
-      case CONTEXT_BUTTON_SET_MOVIESET_ART:
-      case CONTEXT_BUTTON_SET_SEASON_ART:
+      case CONTEXT_BUTTON_SET_ART:
         result = ManageVideoItemArtwork(item, type);
         break;
 
@@ -1065,6 +1069,10 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
         result = true;
         break;
 
+      case CONTEXT_BUTTON_REFRESH:
+        result = RefreshItem(item);
+        break;
+
       default:
         result = CContextMenuManager::GetInstance().OnClick(button, item);
         break;
@@ -1077,6 +1085,32 @@ int CGUIDialogVideoInfo::ManageVideoItem(const CFileItemPtr &item)
     return button;
 
   return -1;
+}
+
+bool CGUIDialogVideoInfo::RefreshItem(const CFileItemPtr &pItem)
+{
+  bool bRefreshAll = false;
+
+  if (pItem->GetVideoInfoTag()->m_type == MediaTypeTvShow)
+  {
+    bool bCanceled = false;
+    if (CGUIDialogYesNo::ShowAndGetInput(CVariant{ 20377 }, CVariant{ 20378 }, bCanceled, CVariant{ "" }, CVariant{ "" }, CGUIDialogYesNo::NO_TIMEOUT))
+    {
+      bRefreshAll = true;
+      CVideoDatabase db;
+      if (db.Open())
+      {
+        db.SetPathHash(pItem->GetPlayablePath(), "");
+        db.Close();
+      }
+    }
+    else
+      bRefreshAll = false;
+
+    if (bCanceled)
+      return false;
+  }
+  return CVideoLibraryQueue::GetInstance().RefreshItemModal(pItem, true, bRefreshAll);
 }
 
 //Add change a title's name
