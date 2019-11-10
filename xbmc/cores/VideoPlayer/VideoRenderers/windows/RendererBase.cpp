@@ -18,6 +18,11 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
+#include <Windows.h>
+#include <d3d11_4.h>
+#include <dxgi1_5.h>
+
+
 using namespace Microsoft::WRL;
 
 void CRenderBuffer::AppendPicture(const VideoPicture& picture)
@@ -161,6 +166,42 @@ bool CRendererBase::Configure(const VideoPicture& picture, float fps, unsigned o
   m_sourceHeight = picture.iHeight;
   m_fps = fps;
   m_renderOrientation = orientation;
+  
+ DXGI_ADAPTER_DESC id = {};
+  DX::DeviceResources::Get()->GetAdapterDesc(&id);
+
+  if (picture.hasDisplayMetadata == false || picture.color_primaries != AVCOL_PRI_BT2020)
+{
+   if (id.VendorId == 0x8086)
+  {
+  DX::Windowing()->WindowsHDR_OFF();
+  };
+  if (id.VendorId == 0x1002)
+      {
+	  DX::Windowing()->SetHdrAMD(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
+};
+if (id.VendorId == 0x10DE)
+  {
+	 DX::Windowing()->SetHdrMonitorMode(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
+       };
+  }
+  
+  if (picture.hasDisplayMetadata || picture.color_primaries == AVCOL_PRI_BT2020)
+  {
+    if (id.VendorId == 0x8086)
+  {
+  DX::Windowing()->WindowsHDR_ON();
+  };
+ if (id.VendorId == 0x1002)
+	{
+  DX::Windowing()->SetHdrAMD(true, (av_q2d(picture.displayMetadata.display_primaries[0][0])), (av_q2d(picture.displayMetadata.display_primaries[0][1])), (av_q2d(picture.displayMetadata.display_primaries[1][0])), (av_q2d(picture.displayMetadata.display_primaries[1][1])), (av_q2d(picture.displayMetadata.display_primaries[2][0])), (av_q2d(picture.displayMetadata.display_primaries[2][1])), (av_q2d(picture.displayMetadata.white_point[0])), (av_q2d(picture.displayMetadata.white_point[1])), (av_q2d(picture.displayMetadata.min_luminance)), (av_q2d(picture.displayMetadata.max_luminance)), picture.lightMetadata.MaxCLL, picture.lightMetadata.MaxFALL);
+  };
+  if (id.VendorId == 0x10DE)
+   {
+  DX::Windowing()->SetHdrMonitorMode(true, (av_q2d(picture.displayMetadata.display_primaries[0][0])), (av_q2d(picture.displayMetadata.display_primaries[0][1])), (av_q2d(picture.displayMetadata.display_primaries[1][0])), (av_q2d(picture.displayMetadata.display_primaries[1][1])), (av_q2d(picture.displayMetadata.display_primaries[2][0])), (av_q2d(picture.displayMetadata.display_primaries[2][1])), (av_q2d(picture.displayMetadata.white_point[0])), (av_q2d(picture.displayMetadata.white_point[1])), (av_q2d (picture.displayMetadata.min_luminance)), (av_q2d (picture.displayMetadata.max_luminance)), picture.lightMetadata.MaxCLL, picture.lightMetadata.MaxFALL);
+     };
+   }
+
 
   return true;
 }
