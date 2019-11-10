@@ -18,6 +18,8 @@
 #include "VideoRenderers/RenderManager.h"
 #include "VideoRenderers/RenderFlags.h"
 #include "VideoRenderers/windows/RendererBase.h"
+#include "rendering/dx/DeviceResources.h"
+#include "rendering/dx/RenderContext.h"
 #include "utils/log.h"
 
 #include <Windows.h>
@@ -401,6 +403,9 @@ bool CProcessorHD::Render(CRect src, CRect dst, ID3D11Resource* target, CRenderB
 {
   CSingleLock lock(m_section);
 
+  DXGI_ADAPTER_DESC id = {};
+  DX::DeviceResources::Get()->GetAdapterDesc(&id);
+
   // restore processor if it was lost
   if (!m_pVideoProcessor && !OpenProcessor())
     return false;
@@ -505,16 +510,28 @@ bool CProcessorHD::Render(CRect src, CRect dst, ID3D11Resource* target, CRenderB
   if (SUCCEEDED(m_pVideoContext.As(&videoCtx1)))
   {
     const DXGI_COLOR_SPACE_TYPE source_color = GetDXGIColorSpace(views[2], m_bSupportHDR10);
-    const DXGI_COLOR_SPACE_TYPE target_color = DX::Windowing()->UseLimitedColor() 
-                                               ? DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709 
-                                               : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+    if (D3D11_VIDEO_PROCESSOR_FEATURE_CAPS_METADATA_HDR10)
+    {
+      const DXGI_COLOR_SPACE_TYPE target_color = DX::Windowing()->UseLimitedColor()
+                                                     ? DXGI_COLOR_SPACE_RGB_STUDIO_G2084_NONE_P2020
+                                                     : DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+      videoCtx1->VideoProcessorSetOutputColorSpace1(m_pVideoProcessor.Get(), target_color);
+    }
+    else
+    {
+      const DXGI_COLOR_SPACE_TYPE target_color = DX::Windowing()->UseLimitedColor()
+                                                     ? DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709
+                                                     : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+      videoCtx1->VideoProcessorSetOutputColorSpace1(m_pVideoProcessor.Get(), target_color);
+    }
 
-    videoCtx1->VideoProcessorSetStreamColorSpace1(m_pVideoProcessor.Get(), DEFAULT_STREAM_INDEX, source_color);
-    videoCtx1->VideoProcessorSetOutputColorSpace1(m_pVideoProcessor.Get(), target_color);
+    videoCtx1->VideoProcessorSetStreamColorSpace1(m_pVideoProcessor.Get(), DEFAULT_STREAM_INDEX,
+                                                  source_color);
+    
     // makes target available for processing in shaders
     videoCtx1->VideoProcessorSetOutputShaderUsage(m_pVideoProcessor.Get(), 1);
-
-    if (m_bSupportHDR10)
+   
+   if (m_bSupportHDR10 && id.VendorId == 0x8086)
     {
       ComPtr<ID3D11VideoContext2> videoCtx2;
       if (SUCCEEDED(m_pVideoContext.As(&videoCtx2)) && views[2]->hasDisplayMetadata)
