@@ -65,7 +65,7 @@
       <comma>SkipPrevious</comma>
       <tab>FullScreen</tab>
       <printscreen>Screenshot</printscreen>
-      <s mod="ctrl">Screenshot</s>
+      <h mod="ctrl">Screenshot</h>
       <minus>VolumeDown</minus>
       <plus>VolumeUp</plus>
       <equals>VolumeUp</equals>
