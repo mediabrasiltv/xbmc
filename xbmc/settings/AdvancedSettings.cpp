@@ -361,7 +361,7 @@ void CAdvancedSettings::Initialize()
   m_GLRectangleHack = false;
   m_iSkipLoopFilter = 0;
   m_bVirtualShares = true;
-  m_bTry10bitOutput = false;
+  m_bTry10bitOutput = true;
 
   m_cpuTempCmd = "";
   m_gpuTempCmd = "";
