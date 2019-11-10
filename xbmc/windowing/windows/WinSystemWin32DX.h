@@ -35,7 +35,11 @@ public:
 
   void UninitHooks();
   void InitHooks(IDXGIOutput* pOutput);
-
+  void WindowsHDR_ON();
+  void WindowsHDR_OFF();
+  void WindowsHDR();
+  void SetHdrAMD(bool enableHDR, double rx, double ry, double gx, double gy, double bx, double by, double wx, double wy, double minMaster, double maxMaster, double maxCLL, double maxFALL);
+  void SetHdrMonitorMode(bool enableHDR, double rx, double ry, double gx, double gy, double bx, double by, double wx, double wy, double maxMaster, double minMaster, DWORD maxCLL, DWORD maxFALL);
   void OnMove(int x, int y) override;
   void OnResize(int width, int height);
 

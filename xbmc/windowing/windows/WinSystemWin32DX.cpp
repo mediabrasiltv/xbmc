@@ -30,6 +30,12 @@
 #include <d3d10umddi.h>
 #pragma warning(default: 4091)
 
+#pragma comment(lib, "nvapi64.lib")
+#include "cores/VideoPlayer/nvapi.h"
+
+#pragma comment(lib, "amd_ags_x64.lib")
+#include <amd_ags.h>
+
 using KODI::PLATFORM::WINDOWS::FromW;
 
 // User Mode Driver hooks definitions
@@ -368,3 +374,255 @@ HRESULT APIENTRY HookOpenAdapter10_2(D3D10DDIARG_OPENADAPTER *pOpenData)
   }
   return hr;
 }
+
+/*
+The source for DisplayConfig right here in this comment. 
+The reason to use an external .exe is because Windows would crash kodi no matter what changes were made. 
+Using an external EXE it is able to activate and deactivate Windows HDR and no crash happens to Kodi.
+
+Source code for DisplayConfig
+
+int main()
+{
+	DISPLAYCONFIG_DEVICE_INFO_HEADER *requestPacket, *setPacket;
+	int returnValue = -1;
+
+	byte set[] = {
+		0x0A, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,
+		0x14, 0x81, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x04, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00 
+	};
+
+	byte request[] = {
+		0x09, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 
+		0x7C, 0x6F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x04, 0x01, 0x00, 0x00, 0xDB, 0x00, 0x00, 0x00, 
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00
+	};
+
+	UINT32 PathCount, ModeCount;
+	DISPLAYCONFIG_PATH_INFO *DisplayPaths;
+	DISPLAYCONFIG_MODE_INFO *DisplayModes;
+
+	returnValue = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &PathCount, &ModeCount);
+
+	DisplayPaths = (DISPLAYCONFIG_PATH_INFO*)malloc(sizeof(DISPLAYCONFIG_PATH_INFO));
+	DisplayModes = (DISPLAYCONFIG_MODE_INFO*)malloc(sizeof(DISPLAYCONFIG_MODE_INFO));
+
+	QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &PathCount, DisplayPaths, &ModeCount, DisplayModes, 0);
+
+	setPacket = (DISPLAYCONFIG_DEVICE_INFO_HEADER*)set;
+	requestPacket = (DISPLAYCONFIG_DEVICE_INFO_HEADER*)request;
+
+	for (int i = 0; i < ModeCount; i++)
+	{
+		if (DisplayModes[i].infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
+		{
+			setPacket->adapterId.HighPart = DisplayModes[i].adapterId.HighPart;
+			setPacket->adapterId.LowPart = DisplayModes[i].adapterId.LowPart;
+			setPacket->id = DisplayModes[i].id;
+
+			requestPacket->adapterId.HighPart = DisplayModes[i].adapterId.HighPart;
+			requestPacket->adapterId.LowPart = DisplayModes[i].adapterId.LowPart;
+			requestPacket->id = DisplayModes[i].id;
+		}
+	}
+	// 9 0 0 0 20 0 0 0 7C 6F 0 0 0 0 0 0 4 1 0 0 D1 0 0 0 0 0 0 0 8 0 0 0  -- HDR OFF
+	// 9 0 0 0 20 0 0 0 7C 6F 0 0 0 0 0 0 4 1 0 0 D3 0 0 0 0 0 0 0 8 0 0 0  -- HDR ON
+	returnValue = DisplayConfigGetDeviceInfo(requestPacket);
+
+	// Registry edit 
+	LPCSTR lpSubKey = "System\\CurrentControlSet\\Control\\GraphicsDrivers\\MonitorDataStore\\SAM0F1416780800_01_07E2_77"; // Needs some kind of dynamic search for different monitors
+	REGSAM samDesired = KEY_SET_VALUE;
+	HKEY AdvancedColorEnabled;
+	DWORD lpData = 1;
+
+	RegOpenKeyExA(HKEY_LOCAL_MACHINE, lpSubKey, 0, samDesired, &AdvancedColorEnabled);
+	RegSetValueExA(AdvancedColorEnabled, "AdvancedColorEnabled", 0, REG_DWORD, (const BYTE*)&lpData, sizeof(lpData));
+	RegCloseKey(AdvancedColorEnabled);
+
+	if (request[20] == 0xD1) // HDR OFF
+	{
+		lpData = 1;
+
+		RegOpenKeyExA(HKEY_LOCAL_MACHINE, lpSubKey, 0, samDesired, &AdvancedColorEnabled);
+		RegSetValueExA(AdvancedColorEnabled, "AdvancedColorEnabled", 0, REG_DWORD, (const BYTE*)&lpData, sizeof(lpData));
+		RegCloseKey(AdvancedColorEnabled);
+
+		set[20] = 1;
+		returnValue = DisplayConfigSetDeviceInfo(setPacket);
+	}
+	else if (request[20] == 0xD3) // HDR ON
+	{
+		lpData = 1;
+
+		RegOpenKeyExA(HKEY_LOCAL_MACHINE, lpSubKey, 0, samDesired, &AdvancedColorEnabled);
+		RegSetValueExA(AdvancedColorEnabled, "AdvancedColorEnabled", 0, REG_DWORD, (const BYTE*)&lpData, sizeof(lpData));
+		RegCloseKey(AdvancedColorEnabled);
+
+		set[20] = 0;
+
+		returnValue = DisplayConfigSetDeviceInfo(setPacket);
+
+		lpData = 0;
+
+		RegOpenKeyExA(HKEY_LOCAL_MACHINE, lpSubKey, 0, samDesired, &AdvancedColorEnabled);
+		RegSetValueExA(AdvancedColorEnabled, "AdvancedColorEnabled", 0, REG_DWORD, (const BYTE*)&lpData, sizeof(lpData));
+		RegCloseKey(AdvancedColorEnabled);
+	}
+
+    return 0;
+}
+
+
+
+
+*/
+
+void CWinSystemWin32DX::WindowsHDR_ON() 
+{
+  system("start DisplayConfig_ON.exe");
+}
+
+void CWinSystemWin32DX::WindowsHDR_OFF() 
+{
+  system("start DisplayConfig_OFF.exe");
+}
+
+void CWinSystemWin32DX::WindowsHDR()
+{
+  system("start DisplayConfig.exe");
+}
+
+void CWinSystemWin32DX::SetHdrAMD(bool enableHDR,
+                                  double rx,
+                                  double ry,
+                                  double gx,
+                                  double gy,
+                                  double bx,
+                                  double by,
+                                  double wx,
+                                  double wy,
+                                  double minMaster,
+                                  double maxMaster,
+                                  double maxCLL,
+                                  double maxFALL)
+{
+
+  if ((agsInit) && (agsDeInit) && (agsSetDisplayMode))
+  {
+    AGSContext* context = NULL;
+    AGSGPUInfo gpuInfo;
+    memset(&gpuInfo, 0, sizeof(gpuInfo));
+
+
+    if (agsInit(&context, NULL, &gpuInfo) == AGS_SUCCESS)
+    {
+      for (int i1 = 0; i1 < gpuInfo.numDevices; i1++)
+        for (int i2 = 0; i2 < gpuInfo.devices[i1].numDisplays; i2++)
+          if (gpuInfo.devices[i1].displays[i2].displayDeviceName)
+          {
+            AGSDisplaySettings settings;
+            ZeroMemory(&settings, sizeof(settings));
+            settings.mode =
+                enableHDR ? AGSDisplaySettings::Mode_HDR10_PQ : AGSDisplaySettings::Mode_SDR;
+            if (enableHDR)
+            {
+              settings.chromaticityRedX = (rx);
+              settings.chromaticityRedY = (ry);
+              settings.chromaticityGreenX = (gx);
+              settings.chromaticityGreenY = (gy);
+              settings.chromaticityBlueX = (bx);
+              settings.chromaticityBlueY = (by);
+              settings.chromaticityWhitePointX = (wx);
+              settings.chromaticityWhitePointY = (wy);
+              settings.minLuminance = (minMaster);
+              settings.maxLuminance = (maxMaster);
+              settings.maxContentLightLevel = (maxCLL);
+              settings.maxFrameAverageLightLevel = (maxFALL);
+              settings.flags = 0;
+            }
+            agsSetDisplayMode(context, i1, i2, &settings) == AGS_SUCCESS;
+          }
+     // agsDeInit(context);
+    }
+  }
+}
+
+void CWinSystemWin32DX::SetHdrMonitorMode(bool enableHDR, double rx, double ry, double gx, double gy, double bx, double by, double wx, double wy, double minMaster, double maxMaster, DWORD maxCLL, DWORD maxFALL)
+{
+		NvAPI_Initialize();
+
+	NvAPI_Status nvStatus = NVAPI_OK;
+	NvDisplayHandle hNvDisplay = NULL;
+
+	NvU32 gpuCount = 0;
+	NvU32 maxDisplayIndex = 0;
+	NvPhysicalGpuHandle ahGPU[NVAPI_MAX_PHYSICAL_GPUS] = {};
+
+	// get the list of displays connected, populate the dynamic components
+	nvStatus = NvAPI_EnumPhysicalGPUs(ahGPU, &gpuCount);
+
+	for (NvU32 i = 0; i < gpuCount; ++i)
+	{
+		NvU32 displayIdCount = 16;
+		NvU32 flags = 0;
+		NV_GPU_DISPLAYIDS displayIdArray[16] = {};
+		displayIdArray[0].version = NV_GPU_DISPLAYIDS_VER;
+
+		nvStatus = NvAPI_GPU_GetConnectedDisplayIds(ahGPU[i], displayIdArray, &displayIdCount, flags);
+
+		if (NVAPI_OK == nvStatus)
+		{
+			printf("Display count %d\r\n", displayIdCount);
+
+			for (maxDisplayIndex = 0; maxDisplayIndex < displayIdCount; ++maxDisplayIndex)
+			{
+				printf("Display tested %d\r\n", maxDisplayIndex);
+
+				NV_HDR_CAPABILITIES hdrCapabilities = {};
+
+				hdrCapabilities.version = NV_HDR_CAPABILITIES_VER;
+
+				if (NVAPI_OK == NvAPI_Disp_GetHdrCapabilities(displayIdArray[maxDisplayIndex].displayId, &hdrCapabilities))
+				{
+
+					if (hdrCapabilities.isST2084EotfSupported)
+						{
+						NV_HDR_COLOR_DATA hdrColorData = {};
+
+						memset(&hdrColorData, 0, sizeof(hdrColorData));
+
+						hdrColorData.version = NV_HDR_COLOR_DATA_VER;
+						hdrColorData.cmd = NV_HDR_CMD_SET;
+						hdrColorData.static_metadata_descriptor_id = NV_STATIC_METADATA_TYPE_1;
+
+						hdrColorData.hdrMode = enableHDR ? NV_HDR_MODE_UHDA_PASSTHROUGH : NV_HDR_MODE_OFF;
+//						hdrColorData.hdrMode = enableHDR ? NV_HDR_MODE_DOLBY_VISION : NV_HDR_MODE_OFF;
+
+						hdrColorData.static_metadata_descriptor_id = NV_STATIC_METADATA_TYPE_1;
+
+						hdrColorData.mastering_display_data.displayPrimary_x0 = (USHORT) (rx * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayPrimary_y0 = (USHORT) (ry * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayPrimary_x1 = (USHORT) (gx * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayPrimary_y1 = (USHORT) (gy * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayPrimary_x2 = (USHORT) (bx * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayPrimary_y2 = (USHORT) (by * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayWhitePoint_x = (USHORT) (wx * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.displayWhitePoint_y = (USHORT) (wy * 0xC350 + 0.5);
+						hdrColorData.mastering_display_data.max_content_light_level = (USHORT) (maxCLL + 0.5);
+						hdrColorData.mastering_display_data.max_display_mastering_luminance = (USHORT)(maxMaster + 0.5);
+						hdrColorData.mastering_display_data.max_frame_average_light_level = (USHORT) (maxFALL + 0.5);
+						hdrColorData.mastering_display_data.min_display_mastering_luminance = (USHORT) (minMaster * 10000.0 + 0.5);
+
+						nvStatus = NvAPI_Disp_HdrColorControl(displayIdArray[maxDisplayIndex].displayId, &hdrColorData);
+						
+	}
+
+}
+				
+							}
+		}
+	}
+}
+
