@@ -70,6 +70,8 @@
 #include "DVDCodecs/DVDCodecUtils.h"
 
 #include <iterator>
+#include "rendering/dx/DeviceResources.h"
+#include "rendering/dx/RenderContext.h"
 
 using namespace KODI::MESSAGING;
 
@@ -2385,6 +2387,23 @@ void CVideoPlayer::SendPlayerMessage(CDVDMsg* pMsg, unsigned int target)
 void CVideoPlayer::OnExit()
 {
   CLog::Log(LOGNOTICE, "CVideoPlayer::OnExit()");
+
+  DXGI_ADAPTER_DESC id = {};
+  DX::DeviceResources::Get()->GetAdapterDesc(&id);
+
+
+ if (id.VendorId == 0x8086)
+ {
+   DX::Windowing()->WindowsHDR_OFF();
+ };
+ if (id.VendorId == 0x10DE)
+ {
+   DX::Windowing()->SetHdrMonitorMode(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
+ };
+ if (id.VendorId == 0x1002)
+ {
+    DX::Windowing()->SetHdrAMD(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
+ };
 
   // set event to inform openfile something went wrong in case openfile is still waiting for this event
   SetCaching(CACHESTATE_DONE);
