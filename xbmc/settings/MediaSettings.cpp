@@ -115,8 +115,8 @@ bool CMediaSettings::Load(const TiXmlNode *settings)
     if (!XMLUtils::GetInt(pElement, "centermixlevel", m_defaultVideoSettings.m_CenterMixLevel))
       m_defaultVideoSettings.m_CenterMixLevel = 0;
 
-    m_defaultVideoSettings.m_ToneMapMethod = 1;
-    m_defaultVideoSettings.m_ToneMapParam = 1.0f;
+    m_defaultVideoSettings.m_ToneMapMethod = 0;
+    m_defaultVideoSettings.m_ToneMapParam = 0.0f;
     m_defaultVideoSettings.m_SubtitleCached = false;
   }
 

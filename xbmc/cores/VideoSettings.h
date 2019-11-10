@@ -111,8 +111,8 @@ public:
   int m_StereoMode;
   bool m_StereoInvert;
   int m_VideoStream;
-  int m_ToneMapMethod = VS_TONEMAPMETHOD_REINHARD;
-  float m_ToneMapParam = 1.0;
+  int m_ToneMapMethod = 0;
+  float m_ToneMapParam = 0.0;
   int m_Orientation = 0;
   int m_CenterMixLevel = 0; // relative to metadata or default
 };

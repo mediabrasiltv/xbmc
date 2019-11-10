@@ -4467,8 +4467,8 @@ bool CVideoDatabase::GetVideoSettings(int idFile, CVideoSettings &settings)
 
       if (settings.m_ToneMapParam == 0.0)
       {
-        settings.m_ToneMapMethod = VS_TONEMAPMETHOD_REINHARD;
-        settings.m_ToneMapParam = 1.0;
+        settings.m_ToneMapMethod = VS_TONEMAPMETHOD_OFF;
+        settings.m_ToneMapParam = 0.0;
       }
       return true;
     }
