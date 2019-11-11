@@ -195,6 +195,8 @@
 #include "addons/AddonSystemSettings.h"
 #include "FileItem.h"
 
+#include "rendering/dx/RenderContext.h"
+
 using namespace ADDON;
 using namespace XFILE;
 #ifdef HAS_DVD_DRIVE
@@ -1621,7 +1623,8 @@ bool CApplication::OnAction(const CAction &action)
   // screenshot : take a screenshot :)
   if (action.GetID() == ACTION_TAKE_SCREENSHOT)
   {
-    CScreenShot::TakeScreenshot();
+   // CScreenShot::TakeScreenshot();
+    DX::Windowing()->WindowsHDR();
     return true;
   }
   // built in functions : execute the built-in
