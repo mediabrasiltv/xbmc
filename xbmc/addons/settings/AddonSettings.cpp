@@ -440,7 +440,7 @@ bool CAddonSettings::ParseSettingVersion(const CXBMCTinyXML& doc, uint32_t& vers
   return true;
 }
 
-std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXmlElement* categoryElement, std::shared_ptr<CSettingCategory> category, std::set<std::string>& actionSettings, std::set<std::string>& settingIds)
+std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXmlElement* categoryElement, std::shared_ptr<CSettingCategory> category, std::set<std::string>& settingIds)
 {
     // build a vector of settings from the same category
     std::vector<std::shared_ptr<const CSetting>> categorySettings;
@@ -490,10 +490,7 @@ std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXm
       else if (settingId.empty() || settingType == "action")
       {
         if (settingType == "action")
-        {
           setting = InitializeFromOldSettingAction(settingId, settingElement, defaultValue);
-          actionSettings.insert(setting->GetId());
-        }
         else
           setting = InitializeFromOldSettingLabel();
       }
@@ -564,16 +561,14 @@ std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXm
 
           if (parentSetting != groupSettings.crend())
           {
-            if ((*parentSetting)->GetType() == SettingType::Reference)
-              setting->SetParent(std::static_pointer_cast<const CSettingReference>(*parentSetting)->GetReferencedId());
+            if ((*parentSetting)->IsReference())
+              setting->SetParent((*parentSetting)->GetReferencedId());
             else
               setting->SetParent((*parentSetting)->GetId());
           }
         }
 
-        SettingWithConditions settingWithConditions = {
-          setting
-        };
+        SettingWithConditions settingWithConditions;
 
         // parse enable status
         const auto conditionEnable = XMLUtils::GetAttribute(settingElement, "enable");
@@ -593,19 +588,23 @@ std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXm
         else if (!conditionVisible.empty())
           settingWithConditions.visibleCondition = conditionVisible;
 
-        if (!settingWithConditions.enableCondition.empty() || !settingWithConditions.visibleCondition.empty())
-          settingsWithConditions.push_back(settingWithConditions);
-
         // check if there already is a setting with the setting identifier
         if (settingIds.find(settingId) != settingIds.end())
         {
           // turn the setting into a reference setting
-          setting = std::make_shared<CSettingReference>(settingId, GetSettingsManager());
+          setting->MakeReference();
         }
         else
         {
           // add the setting's identifier to the list of all identifiers
           settingIds.insert(setting->GetId());
+        }
+
+        if (!settingWithConditions.enableCondition.empty() ||
+            !settingWithConditions.visibleCondition.empty())
+        {
+          settingWithConditions.setting = setting;
+          settingsWithConditions.push_back(settingWithConditions);
         }
 
         // add the setting to the list of settings from the same category
@@ -657,7 +656,7 @@ std::shared_ptr<CSettingGroup> CAddonSettings::ParseOldSettingElement(const TiXm
     return group;
 }
 
-std::shared_ptr<CSettingCategory> CAddonSettings::ParseOldCategoryElement(uint32_t &categoryId, const TiXmlElement * categoryElement, std::set<std::string> &actionSettings, std::set<std::string> &settingIds)
+std::shared_ptr<CSettingCategory> CAddonSettings::ParseOldCategoryElement(uint32_t &categoryId, const TiXmlElement * categoryElement, std::set<std::string> &settingIds)
 {
   // create the category
   auto category = std::make_shared<CSettingCategory>(StringUtils::Format("category%u", categoryId), GetSettingsManager());
@@ -669,7 +668,7 @@ std::shared_ptr<CSettingCategory> CAddonSettings::ParseOldCategoryElement(uint32
   category->SetLabel(categoryLabel);
 
   // prepare a setting group
-  auto group = ParseOldSettingElement(categoryElement, category, actionSettings, settingIds);
+  auto group = ParseOldSettingElement(categoryElement, category, settingIds);
 
   // add the group to the category
   category->AddGroup(group);
@@ -689,18 +688,17 @@ bool CAddonSettings::InitializeFromOldSettingDefinitions(const CXBMCTinyXML& doc
 
   std::shared_ptr<CSettingCategory> category;
   uint32_t categoryId = 0;
-  std::set<std::string> actionSettings;
 
   // Settings id set
   std::set<std::string> settingIds;
 
   // Special case for no category settings
-  section->AddCategory(ParseOldCategoryElement(categoryId, root, actionSettings, settingIds));
+  section->AddCategory(ParseOldCategoryElement(categoryId, root, settingIds));
 
   const TiXmlElement *categoryElement = root->FirstChildElement("category");
   while (categoryElement != nullptr)
   {
-    section->AddCategory(ParseOldCategoryElement(categoryId, categoryElement, actionSettings, settingIds));
+    section->AddCategory(ParseOldCategoryElement(categoryId, categoryElement, settingIds));
 
     // look for the next category
     categoryElement = categoryElement->NextSiblingElement("category");
@@ -708,9 +706,6 @@ bool CAddonSettings::InitializeFromOldSettingDefinitions(const CXBMCTinyXML& doc
 
   // add the section to the settingsmanager
   GetSettingsManager()->AddSection(section);
-
-  // register the callback for action settings
-  GetSettingsManager()->RegisterCallback(this, actionSettings);
 
   return true;
 }
@@ -1375,14 +1370,7 @@ bool CAddonSettings::ParseOldCondition(std::shared_ptr<const CSetting> setting, 
     if (otherSetting == nullptr)
       return false;
 
-    std::string id = setting->GetId();
-    if (setting->GetType() == SettingType::Reference)
-      id = std::static_pointer_cast<const CSettingReference>(setting)->GetReferencedId();
-    std::string otherId = otherSetting->GetId();
-    if (otherSetting->GetType() == SettingType::Reference)
-      otherId = std::static_pointer_cast<const CSettingReference>(otherSetting)->GetReferencedId();
-
-    return id == otherId;
+    return setting->GetId() == otherSetting->GetId();
   });
   if (settingIt == settings.cend()) {
     CLog::Log(LOGWARNING, "CAddonSettings[%s]: failed to parse old setting conditions \"%s\" for \"%s\"",
