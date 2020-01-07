@@ -26,6 +26,7 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
+#include "platform/freebsd/OptionalsReg.h"
 #include "platform/linux/OptionalsReg.h"
 
 #include <vector>
@@ -289,7 +290,7 @@ bool CWinSystemX11GLContext::RefreshGLContext(bool force)
 
   if (gli != "GLX")
   {
-    m_pGLContext = new CGLContextEGL(m_dpy);
+    m_pGLContext = new CGLContextEGL(m_dpy, EGL_OPENGL_API);
     success = m_pGLContext->Refresh(force, m_screen, m_glWindow, m_newGlContext);
     if (success)
     {
