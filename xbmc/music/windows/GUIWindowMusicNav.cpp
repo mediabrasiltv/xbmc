@@ -412,7 +412,8 @@ bool CGUIWindowMusicNav::GetDirectory(const std::string &strDirectory, CFileItem
     if (node == NODE_TYPE_ALBUM ||
         node == NODE_TYPE_ALBUM_RECENTLY_ADDED ||
         node == NODE_TYPE_ALBUM_RECENTLY_PLAYED ||
-        node == NODE_TYPE_ALBUM_TOP100)
+        node == NODE_TYPE_ALBUM_TOP100 ||
+        node == NODE_TYPE_DISC)  // ! @todo: own content type "discs"??
       items.SetContent("albums");
     else if (node == NODE_TYPE_ARTIST)
       items.SetContent("artists");
@@ -914,6 +915,8 @@ std::string CGUIWindowMusicNav::GetStartFolder(const std::string &dir)
     return "musicdb://years/";
   else if (lower == "files")
     return "sources://music/";
+  else if (lower == "boxsets")
+    return "musicdb://boxsets/";
 
   return CGUIWindowMusicBase::GetStartFolder(dir);
 }

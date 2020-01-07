@@ -1107,7 +1107,7 @@ bool CCurlFile::OpenForWrite(const CURL& url, bool bOverWrite)
                               &m_state->m_easyHandle,
                               &m_state->m_multiHandle);
 
-    // setup common curl options
+  // setup common curl options
   SetCommonOptions(m_state);
   SetRequestHeaders(m_state);
 
@@ -1122,7 +1122,6 @@ bool CCurlFile::OpenForWrite(const CURL& url, bool bOverWrite)
 
   assert(m_state->m_multiHandle);
 
-  SetCommonOptions(m_state);
   g_curlInterface.easy_setopt(m_state->m_easyHandle, CURLOPT_UPLOAD, 1);
 
   g_curlInterface.multi_add_handle(m_state->m_multiHandle, m_state->m_easyHandle);
@@ -1362,6 +1361,7 @@ int64_t CCurlFile::Seek(int64_t iFilePosition, int iWhence)
 
   m_state->m_filePos = nextPos;
   m_state->m_sendRange = true;
+  m_state->m_bRetry = m_allowRetry;
 
   long response = m_state->Connect(m_bufferSize);
   if(response < 0 && (m_state->m_fileSize == 0 || m_state->m_fileSize != m_state->m_filePos))
