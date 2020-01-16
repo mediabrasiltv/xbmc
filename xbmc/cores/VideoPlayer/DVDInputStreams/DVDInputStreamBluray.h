@@ -60,6 +60,7 @@ public:
   int64_t GetLength() override;
   int GetBlockSize() override { return 6144; }
   ENextStream NextStream() override;
+  int m_chapter = 1;
 
 
   /* IMenus */
