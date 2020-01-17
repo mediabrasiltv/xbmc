@@ -8,8 +8,13 @@
 
 #import "DarwinEmbedNowPlayingInfoManager.h"
 
-#import "platform/darwin/ios/XBMCController.h"
+#if defined(TARGET_DARWIN_IOS)
+#include "platform/darwin/ios/XBMCController.h"
+#elif defined(TARGET_DARWIN_TVOS)
+#include "platform/darwin/tvos/XBMCController.h"
+#endif
 
+#import <AVFoundation/AVFoundation.h>
 #import <MediaPlayer/MediaPlayer.h>
 
 @implementation DarwinEmbedNowPlayingInfoManager
@@ -45,10 +50,19 @@
   {
     if (auto image = [UIImage imageWithContentsOfFile:thumb])
     {
+      auto square_size = image.size.height;
+      if (image.size.width > square_size)
+        square_size = image.size.width;
+      auto rect = CGRectMake(0, 0, square_size, square_size);
+      UIGraphicsBeginImageContextWithOptions(rect.size, YES, 0.0);
+      [image drawInRect:AVMakeRectWithAspectRatioInsideRect(image.size, rect)];
+      image = UIGraphicsGetImageFromCurrentImageContext();
+      UIGraphicsEndImageContext();
       if (auto mArt =
-          [[MPMediaItemArtwork alloc] initWithBoundsSize:image.size
-                                          requestHandler:^UIImage* _Nonnull(CGSize aSize) {
-                                            return image;}])
+              [[MPMediaItemArtwork alloc] initWithBoundsSize:rect.size
+                                              requestHandler:^UIImage* _Nonnull(CGSize aSize) {
+                                                return image;
+                                              }])
       {
         dict[MPMediaItemPropertyArtwork] = mArt;
       }
@@ -80,7 +94,9 @@
 
   self.playbackState = DARWINEMBED_PLAYBACK_PLAYING;
 
+#if defined(TARGET_DARWIN_IOS)
   [g_xbmcController disableNetworkAutoSuspend];
+#endif
 }
 
 - (void)OnSpeedChanged:(NSDictionary*)item
@@ -98,8 +114,10 @@
 {
   self.playbackState = DARWINEMBED_PLAYBACK_PAUSED;
 
+#if defined(TARGET_DARWIN_IOS)
   // schedule set network auto suspend state for save power if idle.
   [g_xbmcController rescheduleNetworkAutoSuspend];
+#endif
 }
 
 - (void)onStop:(NSDictionary*)item
@@ -108,8 +126,10 @@
 
   self.playbackState = DARWINEMBED_PLAYBACK_STOPPED;
 
+#if defined(TARGET_DARWIN_IOS)
   // delay set network auto suspend state in case we are switching playing item.
   [g_xbmcController rescheduleNetworkAutoSuspend];
+#endif
 }
 
 - (void)observeValueForKeyPath:(NSString*)keyPath

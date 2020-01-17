@@ -68,8 +68,9 @@ using namespace winrt::Windows::System::Profile;
 #elif defined(TARGET_FREEBSD)
 #include <sys/param.h>
 #elif defined(TARGET_LINUX)
+#include "platform/linux/SysfsPath.h"
+
 #include <linux/version.h>
-#include "utils/SysfsUtils.h"
 #endif
 
 #include <system_error>
@@ -557,6 +558,8 @@ std::string CSysInfo::GetOsName(bool emptyIfUnknown /* = false*/)
     osName = GetKernelName(true); // FIXME: for FreeBSD OS name is a kernel name
 #elif defined(TARGET_DARWIN_IOS)
     osName = "iOS";
+#elif defined(TARGET_DARWIN_TVOS)
+    osName = "tvOS";
 #elif defined(TARGET_DARWIN_OSX)
     osName = "OS X";
 #elif defined (TARGET_ANDROID)
@@ -721,19 +724,10 @@ std::string CSysInfo::GetManufacturerName(void)
     auto manufacturer = eas.SystemManufacturer();
     g_charsetConverter.wToUTF8(std::wstring(manufacturer.c_str()), manufName);
 #elif defined(TARGET_LINUX)
-    if (SysfsUtils::Has("/sys/bus/soc/devices/soc0/family"))
-    {
-      std::string family;
-      SysfsUtils::GetString("/sys/bus/soc/devices/soc0/family", family);
-      if (SysfsUtils::Has("/sys/bus/soc/devices/soc0/soc_id"))
-      {
-        std::string soc_id;
-        SysfsUtils::GetString("/sys/bus/soc/devices/soc0/soc_id", soc_id);
-        manufName = family + " " + soc_id;
-      }
-      else
-        manufName = family;
-    }
+
+    auto cpuInfo = CServiceBroker::GetCPUInfo();
+    manufName = cpuInfo->GetCPUSoC();
+
 #elif defined(TARGET_WINDOWS)
     // We just don't care, might be useful on embedded
 #endif
@@ -768,8 +762,8 @@ std::string CSysInfo::GetModelName(void)
     auto manufacturer = eas.SystemProductName();
     g_charsetConverter.wToUTF8(std::wstring(manufacturer.c_str()), modelName);
 #elif defined(TARGET_LINUX)
-    if (SysfsUtils::Has("/sys/bus/soc/devices/soc0/machine"))
-      SysfsUtils::GetString("/sys/bus/soc/devices/soc0/machine", modelName);
+    auto cpuInfo = CServiceBroker::GetCPUInfo();
+    modelName = cpuInfo->GetCPUHardware();
 #elif defined(TARGET_WINDOWS)
     // We just don't care, might be useful on embedded
 #endif
@@ -1058,8 +1052,18 @@ std::string CSysInfo::GetUserAgent()
       && iOSVersion.find_first_not_of('0', lastDotPos + 1) == std::string::npos)
     iOSVersion.erase(lastDotPos);
   StringUtils::Replace(iOSVersion, '.', '_');
-  if (iDev == "iPad" || iDev == "AppleTV")
-    result += "CPU OS ";
+  if (iDev == "AppleTV")
+  {
+    // check if it's ATV4 (AppleTV5,3) or later
+    auto modelMajorNumberEndPos = iDevStr.find_first_of(',', iDevStrDigit);
+    std::string s{iDevStr, iDevStrDigit, modelMajorNumberEndPos - iDevStrDigit};
+    if (stoi(s) >= 5)
+      result += "CPU TVOS";
+    else
+      result += "CPU OS";
+  }
+  else if (iDev == "iPad")
+    result += "CPU OS";
   else
     result += "CPU iPhone OS ";
   result += iOSVersion + " like Mac OS X";
@@ -1199,6 +1203,8 @@ std::string CSysInfo::GetBuildTargetPlatformName(void)
   return "OS X";
 #elif defined(TARGET_DARWIN_IOS)
   return "iOS";
+#elif defined(TARGET_DARWIN_TVOS)
+  return "tvOS";
 #elif defined(TARGET_FREEBSD)
   return "FreeBSD";
 #elif defined(TARGET_ANDROID)
@@ -1222,6 +1228,8 @@ std::string CSysInfo::GetBuildTargetPlatformVersion(void)
   return XSTR_MACRO(__MAC_OS_X_VERSION_MIN_REQUIRED);
 #elif defined(TARGET_DARWIN_IOS)
   return XSTR_MACRO(__IPHONE_OS_VERSION_MIN_REQUIRED);
+#elif defined(TARGET_DARWIN_TVOS)
+  return XSTR_MACRO(__TV_OS_VERSION_MIN_REQUIRED);
 #elif defined(TARGET_FREEBSD)
   return XSTR_MACRO(__FreeBSD_version);
 #elif defined(TARGET_ANDROID)
@@ -1255,9 +1263,12 @@ std::string CSysInfo::GetBuildTargetPlatformVersionDecoded(void)
     return StringUtils::Format("version %d.%d.%d", (__MAC_OS_X_VERSION_MIN_REQUIRED / 100) % 100,
       (__MAC_OS_X_VERSION_MIN_REQUIRED / 10) % 10, __MAC_OS_X_VERSION_MIN_REQUIRED % 10);
 #endif // defined(MAC_OS_X_VERSION_10_10) && __MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10
-#elif defined(TARGET_DARWIN_IOS)
-  return StringUtils::Format("version %d.%d.%d", (__IPHONE_OS_VERSION_MIN_REQUIRED / 10000) % 100,
-                             (__IPHONE_OS_VERSION_MIN_REQUIRED / 100) % 100, __IPHONE_OS_VERSION_MIN_REQUIRED % 100);
+#elif defined(TARGET_DARWIN_EMBEDDED)
+  std::string versionStr = GetBuildTargetPlatformVersion();
+  static const int major = (std::stoi(versionStr) / 10000) % 100;
+  static const int minor = (std::stoi(versionStr) / 100) % 100;
+  static const int rev = std::stoi(versionStr) % 100;
+  return StringUtils::Format("version %d.%d.%d", major, minor, rev);
 #elif defined(TARGET_FREEBSD)
   // FIXME: should works well starting from FreeBSD 8.1
   static const int major = (__FreeBSD_version / 100000) % 100;
