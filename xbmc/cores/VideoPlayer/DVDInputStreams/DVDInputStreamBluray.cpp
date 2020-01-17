@@ -500,6 +500,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
       m_title = disc_info->titles[m_event.param];
     else
       m_title = nullptr;
+      m_menu = false;
 
     break;
   }
@@ -519,6 +520,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
   case BD_EVENT_CHAPTER:
     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_CHAPTER %d", m_event.param);
+	m_chapter = m_event.param;
     break;
 
     /* stream selection */
@@ -548,8 +550,11 @@ void CDVDInputStreamBluray::ProcessEvent() {
   case BD_EVENT_MENU:
     CLog::Log(LOGDEBUG, "CDVDInputStreamBluray - BD_EVENT_MENU %d",
         m_event.param);
-    m_menu = (m_event.param != 0);
-    break;
+      if (m_event.param == 1)
+        m_menu = true;
+      else
+        m_menu = false;
+      break;
 
   case BD_EVENT_IDLE:
     Sleep(100);
@@ -760,7 +765,7 @@ void CDVDInputStreamBluray::OverlayFlush(int64_t pts)
 
   m_player->OnDiscNavResult(static_cast<void*>(group), BD_EVENT_MENU_OVERLAY);
   group->Release();
-  m_menu = true;
+//  m_menu = true;
 #endif
 }
 
@@ -928,7 +933,7 @@ int CDVDInputStreamBluray::GetChapterCount()
 int CDVDInputStreamBluray::GetChapter()
 {
   if(m_titleInfo)
-    return static_cast<int>(bd_get_current_chapter(m_bd) + 1);
+    return static_cast<int>(m_chapter);
   else
     return 0;
 }
@@ -1110,7 +1115,10 @@ void CDVDInputStreamBluray::OnMenu()
   }
 
   if(bd_user_input(m_bd, -1, BD_VK_POPUP) >= 0)
+  {
+	m_menu = !m_menu;
     return;
+  }
   CLog::Log(LOGDEBUG, "CDVDInputStreamBluray::OnMenu - popup failed, trying root");
 
   if(bd_user_input(m_bd, -1, BD_VK_ROOT_MENU) >= 0)
