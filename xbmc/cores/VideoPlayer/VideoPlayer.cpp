@@ -2391,11 +2391,6 @@ void CVideoPlayer::OnExit()
   DXGI_ADAPTER_DESC id = {};
   DX::DeviceResources::Get()->GetAdapterDesc(&id);
 
-
- if (id.VendorId == 0x8086)
- {
-   DX::Windowing()->WindowsHDR_OFF();
- };
  if (id.VendorId == 0x10DE)
  {
    DX::Windowing()->SetHdrMonitorMode(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
