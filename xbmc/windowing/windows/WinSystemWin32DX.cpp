@@ -488,21 +488,6 @@ int main()
 
 */
 
-void CWinSystemWin32DX::WindowsHDR_ON() 
-{
-  system("start DisplayConfig_ON.exe");
-}
-
-void CWinSystemWin32DX::WindowsHDR_OFF() 
-{
-  system("start DisplayConfig_OFF.exe");
-}
-
-void CWinSystemWin32DX::WindowsHDR()
-{
-  system("start DisplayConfig.exe");
-}
-
 void CWinSystemWin32DX::SetHdrAMD(bool enableHDR,
                                   double rx,
                                   double ry,
