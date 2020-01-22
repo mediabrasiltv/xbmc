@@ -477,15 +477,16 @@ int CRendererBase::HDR(CRenderBuffer * meta)
     return 0;
   }
 
-
-  if (meta->color_transfer == AVCOL_TRC_SMPTE2084 && meta->primaries == AVCOL_PRI_BT2020)
-{
+  if (meta->color_transfer == AVCOL_TRC_SMPTE2084 && meta->primaries == AVCOL_PRI_BT2020 ||
+      meta->color_transfer == AVCOL_TRC_ARIB_STD_B67 && meta->primaries == AVCOL_PRI_BT2020)
+  {
   DX::Windowing()->SetHdrAMD(true, rx, ry, gx, gy, bx, by, wx, wy, minmaster, maxmaster, maxCLL,
                                  maxFALL);
 
   DX::Windowing()->SetHdrMonitorMode(true, rx, ry, gx, gy, bx, by, wx, wy, maxmaster, minmaster,
                                          maxCLL, maxFALL);
 }
+
 
 
   CLog::LogF(LOGNOTICE, "Metadata RX: %f.", rx);
