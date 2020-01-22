@@ -121,6 +121,8 @@ public:
   static DXGI_FORMAT GetDXGIFormat(CVideoBuffer* videoBuffer);
   static AVPixelFormat GetAVFormat(DXGI_FORMAT dxgi_format);
 
+  int HDR(CRenderBuffer* meta);
+
 protected:
   explicit CRendererBase(CVideoSettings& videoSettings);
 
