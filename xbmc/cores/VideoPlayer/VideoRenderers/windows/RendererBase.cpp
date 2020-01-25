@@ -159,6 +159,9 @@ CRenderInfo CRendererBase::GetRenderInfo()
 
 bool CRendererBase::Configure(const VideoPicture& picture, float fps, unsigned orientation)
 {
+  DXGI_ADAPTER_DESC id = {};
+  DX::DeviceResources::Get()->GetAdapterDesc(&id);
+
   m_iNumBuffers = 0;
   m_iBufferIndex = 0;
 
@@ -166,6 +169,10 @@ bool CRendererBase::Configure(const VideoPicture& picture, float fps, unsigned o
   m_sourceHeight = picture.iHeight;
   m_fps = fps;
   m_renderOrientation = orientation;
+
+  if (picture.color_primaries != AVCOL_PRI_BT2020 && id.VendorId == 0x1002)
+    DX::Windowing()->SetHdrAMD(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000,
+                               1000, 100);
 
   return true;
 }
@@ -454,7 +461,6 @@ AVPixelFormat CRendererBase::GetAVFormat(DXGI_FORMAT dxgi_format)
 
 int CRendererBase::HDR(CRenderBuffer * meta)
 {
-
   double rx = av_q2d(meta->displayMetadata.display_primaries[0][0]);
   double ry = av_q2d(meta->displayMetadata.display_primaries[0][1]);
   double gx = av_q2d(meta->displayMetadata.display_primaries[1][0]);
@@ -470,8 +476,6 @@ int CRendererBase::HDR(CRenderBuffer * meta)
 
    if (meta->primaries != AVCOL_PRI_BT2020)
   {
-    DX::Windowing()->SetHdrAMD(false, rx, ry, gx, gy, bx, by, wx, wy, minmaster, maxmaster, maxCLL,
-                               maxFALL);
     DX::Windowing()->SetHdrMonitorMode(false, rx, ry, gx, gy, bx, by, wx, wy, maxmaster, minmaster,
                                        maxCLL, maxFALL);
     return 0;

@@ -95,6 +95,8 @@ namespace DX
 
     void SetMonitor(HMONITOR monitor);
     HMONITOR GetMonitor() const;
+  bool is10bitswapchain() const { return m_is10bitswapchain; }
+  bool m_is10bitswapchain;
 #if defined(TARGET_WINDOWS_DESKTOP)
     void SetWindow(HWND window);
 #elif defined(TARGET_WINDOWS_STORE)

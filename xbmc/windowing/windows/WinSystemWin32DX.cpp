@@ -488,6 +488,61 @@ int main()
 
 */
 
+int CWinSystemWin32DX::set12bits()
+{
+  DXGI_ADAPTER_DESC id = {};
+  DX::DeviceResources::Get()->GetAdapterDesc(&id);
+
+  if (id.VendorId != 0x10DE)
+    return 0;
+
+  NvAPI_Initialize();
+
+  NvAPI_Status nvStatus = NVAPI_OK;
+  NvDisplayHandle hNvDisplay = NULL;
+
+  NvU32 gpuCount = 0;
+  NvU32 maxDisplayIndex = 0;
+  NvPhysicalGpuHandle ahGPU[NVAPI_MAX_PHYSICAL_GPUS] = {};
+
+  // get the list of displays connected, populate the dynamic components
+  nvStatus = NvAPI_EnumPhysicalGPUs(ahGPU, &gpuCount);
+
+  for (NvU32 i = 0; i < gpuCount; ++i)
+  {
+    NvU32 displayIdCount = 16;
+    NvU32 flags = 0;
+    NV_GPU_DISPLAYIDS displayIdArray[16] = {};
+    displayIdArray[0].version = NV_GPU_DISPLAYIDS_VER;
+
+    nvStatus = NvAPI_GPU_GetConnectedDisplayIds(ahGPU[i], displayIdArray, &displayIdCount, flags);
+
+    if (NVAPI_OK == nvStatus)
+    {
+      printf("Display count %d\r\n", displayIdCount);
+
+      for (maxDisplayIndex = 0; maxDisplayIndex < displayIdCount; ++maxDisplayIndex)
+      {
+        printf("Display tested %d\r\n", maxDisplayIndex);
+
+          NV_COLOR_DATA colorData;
+          memset(&colorData, 0, sizeof(NV_COLOR_DATA));
+
+          colorData.version = NV_COLOR_DATA_VER;
+          colorData.size = sizeof(NV_COLOR_DATA);
+          colorData.data.bpc = NV_BPC_12;
+	      colorData.data.colorFormat = NV_COLOR_FORMAT_RGB;
+          colorData.cmd = NV_COLOR_CMD_SET;
+
+          nvStatus = NvAPI_Disp_ColorControl(displayIdArray[maxDisplayIndex].displayId, &colorData);
+      }
+    }
+  }
+  return 0;
+}
+
+
+
 
 void CWinSystemWin32DX::SetHdrAMD(bool enableHDR,
                                   double rx,

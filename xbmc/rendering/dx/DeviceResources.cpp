@@ -513,6 +513,9 @@ void DX::DeviceResources::ResizeBuffers()
 
   CLog::LogF(LOGDEBUG, "resize buffers.");
 
+  if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_nvidia12bits)
+  DX::Windowing()->set12bits();
+
   bool bHWStereoEnabled = RENDER_STEREO_MODE_HARDWAREBASED == CServiceBroker::GetWinSystem()->GetGfxContext().GetStereoMode();
   bool windowed = true;
   HRESULT hr = E_FAIL;
@@ -623,6 +626,12 @@ void DX::DeviceResources::ResizeBuffers()
       CLog::LogF(LOGERROR, "unable to create swapchain.");
       return;
     }
+
+  if (swapChainDesc.Format == DXGI_FORMAT_R10G10B10A2_UNORM)
+     m_is10bitswapchain = true;
+    else
+    m_is10bitswapchain = false;
+
 
     hr = swapChain.As(&m_swapChain); CHECK_ERR();
     m_stereoEnabled = bHWStereoEnabled;

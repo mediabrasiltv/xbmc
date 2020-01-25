@@ -44,6 +44,7 @@ public:
   uint8_t PastRefs() const { return m_max_back_refs; }
   bool IsFormatSupported(DXGI_FORMAT format, D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT support) const;
   bool HasHDR10Support() const { return m_bSupportHDR10; }
+  bool hdr10support() const { return m_hdr10support; }
 
   // ID3DResource overrides
   void OnCreateDevice() override  {}
@@ -69,6 +70,7 @@ protected:
   D3D11_VIDEO_PROCESSOR_CAPS m_vcaps = {};
   D3D11_VIDEO_PROCESSOR_RATE_CONVERSION_CAPS m_rateCaps = {};
   bool m_bSupportHDR10 = false;
+  bool m_hdr10support = true;
 
   struct ProcAmpInfo
   {
