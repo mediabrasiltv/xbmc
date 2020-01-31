@@ -553,74 +553,7 @@ bool CProcessorHD::Render(CRect src, CRect dst, ID3D11Resource* target, CRenderB
 
     // makes target available for processing in shaders
     videoCtx1->VideoProcessorSetOutputShaderUsage(m_pVideoProcessor.Get(), 1);
-
-    if (!m_hdr10support &&
-        views[2]->color_transfer == AVCOL_TRC_SMPTE2084 && views[2]->primaries == AVCOL_PRI_BT2020)
-    {
-      ComPtr<ID3D11VideoContext2> videoCtx2;
-      if (SUCCEEDED(m_pVideoContext.As(&videoCtx2)))
-      {
-        DXGI_HDR_METADATA_HDR10 hdr10 = {};
-        hdr10.WhitePoint[0] =
-            from_rational<uint16_t>(50000, views[2]->displayMetadata.white_point[0]);
-        hdr10.WhitePoint[1] =
-            from_rational<uint16_t>(50000, views[2]->displayMetadata.white_point[1]);
-        if (views[2]->displayMetadata.has_primaries)
-        {
-          hdr10.RedPrimary[0] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[0][0]);
-          hdr10.RedPrimary[1] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[0][1]);
-          hdr10.GreenPrimary[0] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[1][0]);
-          hdr10.GreenPrimary[1] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[1][1]);
-          hdr10.BluePrimary[0] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[2][0]);
-          hdr10.BluePrimary[1] =
-              from_rational<uint16_t>(50000, views[2]->displayMetadata.display_primaries[2][1]);
-        }
-        if (views[2]->displayMetadata.has_luminance)
-        {
-          hdr10.MinMasteringLuminance =
-              from_rational<uint32_t>(10000, views[2]->displayMetadata.min_luminance);
-          hdr10.MaxMasteringLuminance =
-              from_rational<uint32_t>(10000, views[2]->displayMetadata.max_luminance);
-        }
-        if (views[2]->hasLightMetadata)
-        {
-          hdr10.MaxContentLightLevel = static_cast<uint16_t>(views[2]->lightMetadata.MaxCLL);
-          hdr10.MaxFrameAverageLightLevel = static_cast<uint16_t>(views[2]->lightMetadata.MaxFALL);
-        }
-        videoCtx2->VideoProcessorSetStreamHDRMetaData(m_pVideoProcessor.Get(), DEFAULT_STREAM_INDEX,
-                                                      DXGI_HDR_METADATA_TYPE_HDR10, sizeof(hdr10),
-                                                      &hdr10);
-      }
-    }
-  }
-  else
-  {
-    // input colorspace
-    bool isBT601 = views[2]->color_space == AVCOL_SPC_BT470BG || views[2]->color_space == AVCOL_SPC_SMPTE170M;
-    D3D11_VIDEO_PROCESSOR_COLOR_SPACE colorSpace
-    {
-      0,                            // 0 - Playback, 1 - Processing
-      views[2]->full_range ? 0 : 1, // 0 - Full (0-255), 1 - Limited (16-235) (RGB)
-      isBT601 ? 1 : 0,              // 0 - BT.601, 1 - BT.709
-      0,                            // 0 - Conventional YCbCr, 1 - xvYCC
-      views[2]->full_range ? 2 : 1  // 0 - driver defaults, 2 - Full range [0-255], 1 - Studio range [16-235] (YUV)
-    };
-    m_pVideoContext->VideoProcessorSetStreamColorSpace(m_pVideoProcessor.Get(), DEFAULT_STREAM_INDEX, &colorSpace);
-    // Output color space
-    // don't apply any color range conversion, this will be fixed at later stage.
-    colorSpace.Usage = 0;  // 0 - playback, 1 - video processing
-    colorSpace.RGB_Range = DX::Windowing()->UseLimitedColor() ? 1 : 0;  // 0 - 0-255, 1 - 16-235
-    colorSpace.YCbCr_Matrix = 1;  // 0 - BT.601, 1 = BT.709
-    colorSpace.YCbCr_xvYCC = 1;  // 0 - Conventional YCbCr, 1 - xvYCC
-    colorSpace.Nominal_Range = 0;  // 2 - 0-255, 1 = 16-235, 0 - undefined
-    m_pVideoContext->VideoProcessorSetOutputColorSpace(m_pVideoProcessor.Get(), &colorSpace);
-  }
-
+}
   // brightness
   ApplyFilter(D3D11_VIDEO_PROCESSOR_FILTER_BRIGHTNESS, static_cast<int>(brightness), 0, 100, 50);
   // contrast
