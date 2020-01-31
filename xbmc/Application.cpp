@@ -1624,6 +1624,7 @@ bool CApplication::OnAction(const CAction &action)
   if (action.GetID() == ACTION_TAKE_SCREENSHOT)
   {
    // CScreenShot::TakeScreenshot();
+    DX::Windowing()->WinHDR();
     return true;
   }
   // built in functions : execute the built-in

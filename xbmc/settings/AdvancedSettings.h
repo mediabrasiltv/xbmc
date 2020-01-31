@@ -305,6 +305,7 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     bool m_bVirtualShares;
     bool m_bTry10bitOutput;
     bool m_nvidia12bits;
+    bool m_autohdr;
 
     std::string m_cpuTempCmd;
     std::string m_gpuTempCmd;

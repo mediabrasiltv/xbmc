@@ -541,6 +541,165 @@ int CWinSystemWin32DX::set12bits()
   return 0;
 }
 
+int CWinSystemWin32DX::WinHDR()
+{
+  uint32_t pathCount = 0;
+  uint32_t modeCount = 0;
+  bool success = false;
+
+  if (ERROR_SUCCESS == GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount))
+  {
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+
+    if (ERROR_SUCCESS == QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(),
+                                            &modeCount, modes.data(), nullptr))
+    {
+      DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getColorInfo = {};
+      getColorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+      getColorInfo.header.size = sizeof(getColorInfo);
+
+      DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setColorState = {};
+      setColorState.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+      setColorState.header.size = sizeof(setColorState);
+
+      for (const auto& mode : modes)
+      {
+        if (mode.infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
+        {
+          getColorInfo.header.adapterId.HighPart = mode.adapterId.HighPart;
+          getColorInfo.header.adapterId.LowPart = mode.adapterId.LowPart;
+          getColorInfo.header.id = mode.id;
+
+          setColorState.header.adapterId.HighPart = mode.adapterId.HighPart;
+          setColorState.header.adapterId.LowPart = mode.adapterId.LowPart;
+          setColorState.header.id = mode.id;
+
+          if (ERROR_SUCCESS == DisplayConfigGetDeviceInfo(&getColorInfo.header))
+          {
+            // HDR is OFF
+            if (getColorInfo.advancedColorSupported && !getColorInfo.advancedColorEnabled)
+            {
+              setColorState.enableAdvancedColor = TRUE;
+              CLog::LogF(LOGNOTICE, "Toggle Windows HDR On (OFF => ON).");
+              success = (ERROR_SUCCESS == DisplayConfigSetDeviceInfo(&setColorState.header));
+              break;
+            }
+            // HDR is ON
+            else if (getColorInfo.advancedColorSupported && getColorInfo.advancedColorEnabled)
+            {
+              setColorState.enableAdvancedColor = FALSE;
+              CLog::LogF(LOGNOTICE, "Toggle Windows HDR Off (ON => OFF).");
+              success = (ERROR_SUCCESS == DisplayConfigSetDeviceInfo(&setColorState.header));
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+int CWinSystemWin32DX::WinHDR_ON()
+{
+  uint32_t pathCount = 0;
+  uint32_t modeCount = 0;
+  bool success = false;
+
+  if (ERROR_SUCCESS == GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount))
+  {
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+
+    if (ERROR_SUCCESS == QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(),
+                                            &modeCount, modes.data(), nullptr))
+    {
+      DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getColorInfo = {};
+      getColorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+      getColorInfo.header.size = sizeof(getColorInfo);
+
+      DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setColorState = {};
+      setColorState.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+      setColorState.header.size = sizeof(setColorState);
+
+      for (const auto& mode : modes)
+      {
+        if (mode.infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
+        {
+          getColorInfo.header.adapterId.HighPart = mode.adapterId.HighPart;
+          getColorInfo.header.adapterId.LowPart = mode.adapterId.LowPart;
+          getColorInfo.header.id = mode.id;
+
+          setColorState.header.adapterId.HighPart = mode.adapterId.HighPart;
+          setColorState.header.adapterId.LowPart = mode.adapterId.LowPart;
+          setColorState.header.id = mode.id;
+
+          if (ERROR_SUCCESS == DisplayConfigGetDeviceInfo(&getColorInfo.header))
+          {
+            // HDR is OFF
+            if (getColorInfo.advancedColorSupported && !getColorInfo.advancedColorEnabled)
+            {
+              setColorState.enableAdvancedColor = TRUE;
+              success = (ERROR_SUCCESS == DisplayConfigSetDeviceInfo(&setColorState.header));
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+
+int CWinSystemWin32DX::WinHDR_OFF()
+{
+  uint32_t pathCount = 0;
+  uint32_t modeCount = 0;
+  bool success = false;
+
+  if (ERROR_SUCCESS == GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount))
+  {
+    std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+    std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+
+    if (ERROR_SUCCESS == QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(),
+                                            &modeCount, modes.data(), nullptr))
+    {
+      DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO getColorInfo = {};
+      getColorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+      getColorInfo.header.size = sizeof(getColorInfo);
+
+      DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setColorState = {};
+      setColorState.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
+      setColorState.header.size = sizeof(setColorState);
+
+      for (const auto& mode : modes)
+      {
+        if (mode.infoType == DISPLAYCONFIG_MODE_INFO_TYPE_TARGET)
+        {
+          getColorInfo.header.adapterId.HighPart = mode.adapterId.HighPart;
+          getColorInfo.header.adapterId.LowPart = mode.adapterId.LowPart;
+          getColorInfo.header.id = mode.id;
+
+          setColorState.header.adapterId.HighPart = mode.adapterId.HighPart;
+          setColorState.header.adapterId.LowPart = mode.adapterId.LowPart;
+          setColorState.header.id = mode.id;
+
+          if (ERROR_SUCCESS == DisplayConfigGetDeviceInfo(&getColorInfo.header))
+          {
+            setColorState.enableAdvancedColor = FALSE;
+            success = (ERROR_SUCCESS == DisplayConfigSetDeviceInfo(&setColorState.header));
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return 0;
+}
 
 
 

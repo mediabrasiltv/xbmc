@@ -2400,6 +2400,9 @@ void CVideoPlayer::OnExit()
     DX::Windowing()->SetHdrAMD(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000, 1000, 100);
  };
 
+ if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_autohdr)
+   DX::Windowing()->WinHDR_OFF();
+
   // set event to inform openfile something went wrong in case openfile is still waiting for this event
   SetCaching(CACHESTATE_DONE);
 

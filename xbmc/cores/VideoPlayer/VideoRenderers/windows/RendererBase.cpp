@@ -22,6 +22,9 @@
 #include <d3d11_4.h>
 #include <dxgi1_5.h>
 
+#include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
+
 
 using namespace Microsoft::WRL;
 
@@ -169,6 +172,14 @@ bool CRendererBase::Configure(const VideoPicture& picture, float fps, unsigned o
   m_sourceHeight = picture.iHeight;
   m_fps = fps;
   m_renderOrientation = orientation;
+
+  if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_autohdr &&
+      picture.color_primaries == AVCOL_PRI_BT2020)
+    DX::Windowing()->WinHDR_ON();
+
+    if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_autohdr &&
+      picture.color_primaries != AVCOL_PRI_BT2020)
+    DX::Windowing()->WinHDR_OFF();
 
   if (picture.color_primaries != AVCOL_PRI_BT2020 && id.VendorId == 0x1002)
     DX::Windowing()->SetHdrAMD(false, 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290, 1.0, 1000,

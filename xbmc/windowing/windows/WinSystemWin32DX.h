@@ -34,6 +34,9 @@ public:
   void UninitHooks();
   void InitHooks(IDXGIOutput* pOutput);
   int set12bits();
+  int CWinSystemWin32DX::WinHDR();
+  int WinHDR_ON();
+  int WinHDR_OFF();
   void SetHdrAMD(bool enableHDR, double rx, double ry, double gx, double gy, double bx, double by, double wx, double wy, double minMaster, double maxMaster, double maxCLL, double maxFALL);
   void SetHdrMonitorMode(bool enableHDR, double rx, double ry, double gx, double gy, double bx, double by, double wx, double wy, double maxMaster, double minMaster, double maxCLL, double maxFALL);
   void OnMove(int x, int y) override;
