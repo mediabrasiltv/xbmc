@@ -640,7 +640,7 @@ void DX::DeviceResources::ResizeBuffers()
     // ensures that the application will only render after each VSync, minimizing power consumption.
     ComPtr<IDXGIDevice1> dxgiDevice;
     hr = m_d3dDevice.As(&dxgiDevice); CHECK_ERR();
-    dxgiDevice->SetMaximumFrameLatency(6);
+    dxgiDevice->SetMaximumFrameLatency(3);
   }
 }
 
