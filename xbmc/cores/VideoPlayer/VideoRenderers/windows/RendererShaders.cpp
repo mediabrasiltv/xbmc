@@ -1,4 +1,4 @@
-﻿/*
+/*
  *  Copyright (C) 2017-2019 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
@@ -11,7 +11,9 @@
 #include "DVDCodecs/Video/DXVA.h"
 #include "rendering/dx/RenderContext.h"
 #include "utils/CPUInfo.h"
-#include "utils/gpu_memcpy_sse4.h"
+#ifndef _M_ARM
+  #include "utils/gpu_memcpy_sse4.h"
+#endif
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 
@@ -35,22 +37,35 @@ void CRendererShaders::GetWeight(std::map<RenderMethod, int>& weights, const Vid
   unsigned weight = 0;
   const AVPixelFormat av_pixel_format = picture.videoBuffer->GetFormat();
 
-  if (av_pixel_format == AV_PIX_FMT_D3D11VA_VLD)
+  switch (av_pixel_format)
   {
-    if (IsHWPicSupported(picture))
-      // support natively
-      weight += 1000;
-    else
-      // double copying (GPU->CPU->GPU)
-      weight += 200;
+    case AV_PIX_FMT_D3D11VA_VLD:
+      if (IsHWPicSupported(picture))
+        weight += 1000; // support natively
+      else
+        weight += 200; // double copying (GPU->CPU->GPU)
+      break;
+    case AV_PIX_FMT_YUV420P:
+    case AV_PIX_FMT_NV12:
+      weight += 500; // single copying
+      break;
+    case AV_PIX_FMT_YUV420P10:
+    case AV_PIX_FMT_YUV420P16:
+      if (DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16_UNORM, D3D11_FORMAT_SUPPORT_TEXTURE2D))
+        weight += 500; // single copying
+      else
+        CLog::LogF(LOGWARNING, "Texture format DXGI_FORMAT_R16_UNORM is not supported.");
+      break;
+    case AV_PIX_FMT_P010:
+    case AV_PIX_FMT_P016:
+      if (DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16_UNORM, D3D11_FORMAT_SUPPORT_TEXTURE2D) &&
+          DX::Windowing()->IsFormatSupport(DXGI_FORMAT_R16G16_UNORM,
+                                           D3D11_FORMAT_SUPPORT_TEXTURE2D))
+        weight += 500; // single copying
+      else
+        CLog::LogF(LOGWARNING, "Texture format R16_UNORM / R16G16_UNORM is not supported.");
+      break;
   }
-  else if (av_pixel_format == AV_PIX_FMT_YUV420P ||
-    av_pixel_format == AV_PIX_FMT_YUV420P10 ||
-    av_pixel_format == AV_PIX_FMT_YUV420P16 ||
-    av_pixel_format == AV_PIX_FMT_NV12 ||
-    av_pixel_format == AV_PIX_FMT_P010 ||
-    av_pixel_format == AV_PIX_FMT_P016)
-    weight += 500; // single copying
 
   if (weight > 0)
     weights[RENDER_PS] = weight;
@@ -132,7 +147,14 @@ void CRendererShaders::UpdateVideoFilters()
   if (!m_colorShader)
   {
     m_colorShader = std::make_unique<CYUV2RGBShader>();
-    if (!m_colorShader->Create(m_format, m_srcPrimaries, m_srcPrimaries))
+
+    AVColorPrimaries dstPrimaries = AVCOL_PRI_BT709;
+
+    if (DX::Windowing()->IsHDROutput() &&
+        (m_srcPrimaries == AVCOL_PRI_BT709 || m_srcPrimaries == AVCOL_PRI_BT2020))
+      dstPrimaries = m_srcPrimaries;
+
+    if (!m_colorShader->Create(m_format, dstPrimaries, m_srcPrimaries))
     {
       // we are in a big trouble
       CLog::LogF(LOGERROR, "unable to create YUV->RGB shader, rendering is not possible");
@@ -274,18 +296,6 @@ void CRendererShaders::CRenderBufferImpl::AppendPicture(const VideoPicture& pict
   }
 }
 
-bool CRendererShaders::CRenderBufferImpl::IsLoaded()
-{
-  if (!videoBuffer)
-    return false;
-
-  if (videoBuffer->GetFormat() == AV_PIX_FMT_D3D11VA_VLD &&
-    AV_PIX_FMT_D3D11VA_VLD == av_format)
-    return true;
-
-  return m_bLoaded;
-}
-
 bool CRendererShaders::CRenderBufferImpl::UploadBuffer()
 {
   if (!videoBuffer)
@@ -293,7 +303,9 @@ bool CRendererShaders::CRenderBufferImpl::UploadBuffer()
 
   if (videoBuffer->GetFormat() == AV_PIX_FMT_D3D11VA_VLD)
   {
-    if (AV_PIX_FMT_D3D11VA_VLD != av_format)
+    if (AV_PIX_FMT_D3D11VA_VLD == av_format)
+      m_bLoaded = true;
+    else
       m_bLoaded = UploadFromGPU();
   }
   else
@@ -353,7 +365,6 @@ void CRendererShaders::CRenderBufferImpl::ReleasePicture()
 
   m_planes[0] = nullptr;
   m_planes[1] = nullptr;
-  m_bLoaded = false;
 }
 
 bool CRendererShaders::CRenderBufferImpl::UploadFromGPU()
