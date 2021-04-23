@@ -1,23 +1,12 @@
-#pragma once
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
+
+#pragma once
 
 #include "IDirectory.h"
 #include "MusicDatabaseDirectory/DirectoryNode.h"
@@ -29,20 +18,20 @@ namespace XFILE
   {
   public:
     CMusicDatabaseDirectory(void);
-    virtual ~CMusicDatabaseDirectory(void);
-    virtual bool GetDirectory(const CStdString& strPath, CFileItemList &items);
-    virtual bool IsAllowed(const CStdString &strFile) const { return true; };
-    virtual bool Exists(const char* strPath);
-    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryChildType(const CStdString& strPath);
-    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryType(const CStdString& strPath);
-    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryParentType(const CStdString& strPath);
-    bool IsArtistDir(const CStdString& strDirectory);
-    bool HasAlbumInfo(const CStdString& strDirectory);
-    void ClearDirectoryCache(const CStdString& strDirectory);
-    static bool IsAllItem(const CStdString& strDirectory);
-    static bool GetLabel(const CStdString& strDirectory, CStdString& strLabel);
-    bool ContainsSongs(const CStdString &path);
-    static bool CanCache(const CStdString& strPath);
-    static CStdString GetIcon(const CStdString& strDirectory);
+    ~CMusicDatabaseDirectory(void) override;
+    bool GetDirectory(const CURL& url, CFileItemList &items) override;
+    bool AllowAll() const override { return true; }
+    bool Exists(const CURL& url) override;
+    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryChildType(const std::string& strPath);
+    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryType(const std::string& strPath);
+    static MUSICDATABASEDIRECTORY::NODE_TYPE GetDirectoryParentType(const std::string& strPath);
+    static bool GetDirectoryNodeInfo(const std::string& strPath, MUSICDATABASEDIRECTORY::NODE_TYPE& type, MUSICDATABASEDIRECTORY::NODE_TYPE& childtype, MUSICDATABASEDIRECTORY::CQueryParams& params);
+    bool IsArtistDir(const std::string& strDirectory);
+    void ClearDirectoryCache(const std::string& strDirectory);
+    static bool IsAllItem(const std::string& strDirectory);
+    static bool GetLabel(const std::string& strDirectory, std::string& strLabel);
+    bool ContainsSongs(const std::string &path);
+    static bool CanCache(const std::string& strPath);
+    static std::string GetIcon(const std::string& strDirectory);
   };
 }

@@ -1,68 +1,85 @@
-#pragma once
 /*
- *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2010-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "system.h"
-#ifdef HAS_ALSA
+#pragma once
 
 #include "cores/AudioEngine/Interfaces/AESink.h"
 #include "cores/AudioEngine/Utils/AEDeviceInfo.h"
+#include "cores/AudioEngine/Sinks/alsa/ALSADeviceMonitor.h"
+#include "cores/AudioEngine/Sinks/alsa/ALSAHControlMonitor.h"
 #include <stdint.h>
 
-#define ALSA_PCM_NEW_HW_PARAMS_API
 #include <alsa/asoundlib.h>
 
 #include "threads/CriticalSection.h"
 
+// ARGH... this is apparently needed to avoid FDEventMonitor
+// being destructed before CALSA*Monitor below.
+#include "platform/linux/FDEventMonitor.h"
+
+#define AE_MIN_PERIODSIZE 256
+
 class CAESinkALSA : public IAESink
 {
 public:
-  virtual const char *GetName() { return "ALSA"; }
+  const char *GetName() override { return "ALSA"; }
 
   CAESinkALSA();
-  virtual ~CAESinkALSA();
+  ~CAESinkALSA() override;
 
-  virtual bool Initialize  (AEAudioFormat &format, std::string &device);
-  virtual void Deinitialize();
-
-  virtual void         Stop            ();
-  virtual double       GetDelay        ();
-  virtual double       GetCacheTotal   ();
-  virtual unsigned int AddPackets      (uint8_t *data, unsigned int frames, bool hasAudio, bool blocking = false);
-  virtual void         Drain           ();
-
+  static void Register();
+  static IAESink* Create(std::string &device, AEAudioFormat &desiredFormat);
   static void EnumerateDevicesEx(AEDeviceInfoList &list, bool force = false);
-private:
-  CAEChannelInfo GetChannelLayout(AEAudioFormat format, unsigned int minChannels, unsigned int maxChannels);
-  void           GetAESParams(const AEAudioFormat format, std::string& params);
-  void           HandleError(const char* name, int err);
+  static void Cleanup();
 
-  std::string       m_initDevice;
-  AEAudioFormat     m_initFormat;
-  AEAudioFormat     m_format;
-  unsigned int      m_bufferSize;
-  double            m_formatSampleRateMul;
-  bool              m_passthrough;
-  std::string       m_device;
-  snd_pcm_t        *m_pcm;
-  int               m_timeout;
+  bool Initialize(AEAudioFormat &format, std::string &device) override;
+  void Deinitialize() override;
+
+  virtual void Stop ();
+  void GetDelay(AEDelayStatus& status) override;
+  double GetCacheTotal() override;
+  unsigned int AddPackets(uint8_t **data, unsigned int frames, unsigned int offset) override;
+  void Drain() override;
+
+private:
+  CAEChannelInfo GetChannelLayoutRaw(const AEAudioFormat& format);
+  CAEChannelInfo GetChannelLayoutLegacy(const AEAudioFormat& format, unsigned int minChannels, unsigned int maxChannels);
+  CAEChannelInfo GetChannelLayout(const AEAudioFormat& format, unsigned int channels);
+
+  static AEChannel ALSAChannelToAEChannel(unsigned int alsaChannel);
+  static unsigned int AEChannelToALSAChannel(AEChannel aeChannel);
+  static CAEChannelInfo ALSAchmapToAEChannelMap(snd_pcm_chmap_t* alsaMap);
+  static snd_pcm_chmap_t* AEChannelMapToALSAchmap(const CAEChannelInfo& info);
+  static snd_pcm_chmap_t* CopyALSAchmap(snd_pcm_chmap_t* alsaMap);
+  static std::string ALSAchmapToString(snd_pcm_chmap_t* alsaMap);
+  static CAEChannelInfo GetAlternateLayoutForm(const CAEChannelInfo& info);
+  snd_pcm_chmap_t* SelectALSAChannelMap(const CAEChannelInfo& info);
+
+  void GetAESParams(const AEAudioFormat& format, std::string& params);
+  void HandleError(const char* name, int err);
+
+  std::string m_initDevice;
+  AEAudioFormat m_initFormat;
+  AEAudioFormat m_format;
+  unsigned int m_bufferSize = 0;
+  double m_formatSampleRateMul = 0.0;
+  bool m_passthrough = false;
+  std::string m_device;
+  snd_pcm_t *m_pcm;
+  int m_timeout = 0;
+  // support fragmentation, e.g. looping in the sink to get a certain amount of data onto the device
+  bool m_fragmented = false;
+  unsigned int m_originalPeriodSize = AE_MIN_PERIODSIZE;
+
+#if HAVE_LIBUDEV
+  static CALSADeviceMonitor m_deviceMonitor;
+#endif
+  static CALSAHControlMonitor m_controlMonitor;
 
   struct ALSAConfig
   {
@@ -91,5 +108,4 @@ private:
 
   static void sndLibErrorHandler(const char *file, int line, const char *function, int err, const char *fmt, ...);
 };
-#endif
 

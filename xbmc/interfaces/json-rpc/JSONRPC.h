@@ -1,33 +1,22 @@
-#pragma once
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
+
+#pragma once
+
+#include "JSONRPCUtils.h"
+#include "JSONServiceDescription.h"
 
 #include <iostream>
 #include <map>
 #include <stdio.h>
 #include <string>
 
-#include "JSONRPCUtils.h"
-#include "JSONServiceDescription.h"
-#include "interfaces/IAnnouncer.h"
-#include "utils/StdString.h"
+class CVariant;
 
 namespace JSONRPC
 {
@@ -62,18 +51,17 @@ namespace JSONRPC
      in the request are checked for validity and completeness. If the request
      is valid and the requested method exists it is called and executed.
      */
-    static CStdString MethodCall(const CStdString &inputString, ITransportLayer *transport, IClient *client);
+    static std::string MethodCall(const std::string &inputString, ITransportLayer *transport, IClient *client);
 
-    static JSONRPC_STATUS Introspect(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS Version(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS Permission(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS Ping(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS GetConfiguration(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS SetConfiguration(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-    static JSONRPC_STATUS NotifyAll(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
-  
+    static JSONRPC_STATUS Introspect(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS Version(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS Permission(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS Ping(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS GetConfiguration(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS SetConfiguration(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+    static JSONRPC_STATUS NotifyAll(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result);
+
   private:
-    static void setup();
     static bool HandleMethodCall(const CVariant& request, CVariant& response, ITransportLayer *transport, IClient *client);
     static inline bool IsProperJSONRPC(const CVariant& inputroot);
 

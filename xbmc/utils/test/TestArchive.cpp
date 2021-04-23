@@ -1,22 +1,14 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
+
+#if defined(TARGET_WINDOWS)
+#  include <windows.h>
+#endif
 
 #include "utils/Archive.h"
 #include "utils/Variant.h"
@@ -24,7 +16,7 @@
 
 #include "test/TestUtils.h"
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
 class TestArchive : public testing::Test
 {
@@ -33,7 +25,7 @@ protected:
   {
     file = XBMC_CREATETEMPFILE(".ar");
   }
-  ~TestArchive()
+  ~TestArchive() override
   {
     EXPECT_TRUE(XBMC_DELETETEMPFILE(file));
   }
@@ -42,7 +34,7 @@ protected:
 
 TEST_F(TestArchive, IsStoring)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   CArchive arstore(file, CArchive::store);
   EXPECT_TRUE(arstore.IsStoring());
   EXPECT_FALSE(arstore.IsLoading());
@@ -51,7 +43,7 @@ TEST_F(TestArchive, IsStoring)
 
 TEST_F(TestArchive, IsLoading)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   CArchive arload(file, CArchive::load);
   EXPECT_TRUE(arload.IsLoading());
   EXPECT_FALSE(arload.IsStoring());
@@ -60,14 +52,14 @@ TEST_F(TestArchive, IsLoading)
 
 TEST_F(TestArchive, FloatArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   float float_ref = 1, float_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << float_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> float_var;
   arload.Close();
@@ -77,14 +69,14 @@ TEST_F(TestArchive, FloatArchive)
 
 TEST_F(TestArchive, DoubleArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   double double_ref = 2, double_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << double_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> double_var;
   arload.Close();
@@ -94,14 +86,14 @@ TEST_F(TestArchive, DoubleArchive)
 
 TEST_F(TestArchive, IntegerArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   int int_ref = 3, int_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << int_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> int_var;
   arload.Close();
@@ -111,14 +103,14 @@ TEST_F(TestArchive, IntegerArchive)
 
 TEST_F(TestArchive, UnsignedIntegerArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   unsigned int unsigned_int_ref = 4, unsigned_int_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << unsigned_int_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> unsigned_int_var;
   arload.Close();
@@ -128,14 +120,14 @@ TEST_F(TestArchive, UnsignedIntegerArchive)
 
 TEST_F(TestArchive, Int64tArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   int64_t int64_t_ref = 5, int64_t_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << int64_t_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> int64_t_var;
   arload.Close();
@@ -145,14 +137,14 @@ TEST_F(TestArchive, Int64tArchive)
 
 TEST_F(TestArchive, UInt64tArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   uint64_t uint64_t_ref = 6, uint64_t_var = 0;
 
   CArchive arstore(file, CArchive::store);
   arstore << uint64_t_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> uint64_t_var;
   arload.Close();
@@ -162,14 +154,14 @@ TEST_F(TestArchive, UInt64tArchive)
 
 TEST_F(TestArchive, BoolArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   bool bool_ref = true, bool_var = false;
 
   CArchive arstore(file, CArchive::store);
   arstore << bool_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> bool_var;
   arload.Close();
@@ -179,14 +171,14 @@ TEST_F(TestArchive, BoolArchive)
 
 TEST_F(TestArchive, CharArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   char char_ref = 'A', char_var = '\0';
 
   CArchive arstore(file, CArchive::store);
   arstore << char_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> char_var;
   arload.Close();
@@ -194,43 +186,43 @@ TEST_F(TestArchive, CharArchive)
   EXPECT_EQ(char_ref, char_var);
 }
 
-TEST_F(TestArchive, CStdStringArchive)
+TEST_F(TestArchive, WStringArchive)
 {
-  ASSERT_TRUE(file);
-  CStdStringW CStdStringW_ref = L"test CStdStringW", CStdStringW_var = L"";
+  ASSERT_NE(nullptr, file);
+  std::wstring wstring_ref = L"test wstring", wstring_var;
 
   CArchive arstore(file, CArchive::store);
-  arstore << CStdStringW_ref;
+  arstore << wstring_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
-  arload >> CStdStringW_var;
+  arload >> wstring_var;
   arload.Close();
 
-  EXPECT_STREQ(CStdStringW_ref.c_str(), CStdStringW_var.c_str());
+  EXPECT_STREQ(wstring_ref.c_str(), wstring_var.c_str());
 }
 
-TEST_F(TestArchive, CStdStringWArchive)
+TEST_F(TestArchive, StringArchive)
 {
-  ASSERT_TRUE(file);
-  CStdString CStdString_ref = "test CStdString", CStdString_var = "";
+  ASSERT_NE(nullptr, file);
+  std::string string_ref = "test string", string_var;
 
   CArchive arstore(file, CArchive::store);
-  arstore << CStdString_ref;
+  arstore << string_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
-  arload >> CStdString_var;
+  arload >> string_var;
   arload.Close();
 
-  EXPECT_STREQ(CStdString_ref.c_str(), CStdString_var.c_str());
+  EXPECT_STREQ(string_ref.c_str(), string_var.c_str());
 }
 
 TEST_F(TestArchive, SYSTEMTIMEArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   SYSTEMTIME SYSTEMTIME_ref = { 1, 2, 3, 4, 5, 6, 7, 8 };
   SYSTEMTIME SYSTEMTIME_var = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -238,7 +230,7 @@ TEST_F(TestArchive, SYSTEMTIMEArchive)
   arstore << SYSTEMTIME_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> SYSTEMTIME_var;
   arload.Close();
@@ -248,14 +240,14 @@ TEST_F(TestArchive, SYSTEMTIMEArchive)
 
 TEST_F(TestArchive, CVariantArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   CVariant CVariant_ref((int)1), CVariant_var;
 
   CArchive arstore(file, CArchive::store);
   arstore << CVariant_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> CVariant_var;
   arload.Close();
@@ -266,14 +258,14 @@ TEST_F(TestArchive, CVariantArchive)
 
 TEST_F(TestArchive, CVariantArchiveString)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   CVariant CVariant_ref("teststring"), CVariant_var;
 
   CArchive arstore(file, CArchive::store);
   arstore << CVariant_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> CVariant_var;
   arload.Close();
@@ -284,18 +276,18 @@ TEST_F(TestArchive, CVariantArchiveString)
 
 TEST_F(TestArchive, StringVectorArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   std::vector<std::string> strArray_ref, strArray_var;
-  strArray_ref.push_back("test strArray_ref 0");
-  strArray_ref.push_back("test strArray_ref 1");
-  strArray_ref.push_back("test strArray_ref 2");
-  strArray_ref.push_back("test strArray_ref 3");
+  strArray_ref.emplace_back("test strArray_ref 0");
+  strArray_ref.emplace_back("test strArray_ref 1");
+  strArray_ref.emplace_back("test strArray_ref 2");
+  strArray_ref.emplace_back("test strArray_ref 3");
 
   CArchive arstore(file, CArchive::store);
   arstore << strArray_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> strArray_var;
   arload.Close();
@@ -308,7 +300,7 @@ TEST_F(TestArchive, StringVectorArchive)
 
 TEST_F(TestArchive, IntegerVectorArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   std::vector<int> iArray_ref, iArray_var;
   iArray_ref.push_back(0);
   iArray_ref.push_back(1);
@@ -319,7 +311,7 @@ TEST_F(TestArchive, IntegerVectorArchive)
   arstore << iArray_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   arload >> iArray_var;
   arload.Close();
@@ -332,7 +324,7 @@ TEST_F(TestArchive, IntegerVectorArchive)
 
 TEST_F(TestArchive, MultiTypeArchive)
 {
-  ASSERT_TRUE(file);
+  ASSERT_NE(nullptr, file);
   float float_ref = 1, float_var = 0;
   double double_ref = 2, double_var = 0;
   int int_ref = 3, int_var = 0;
@@ -341,16 +333,16 @@ TEST_F(TestArchive, MultiTypeArchive)
   uint64_t uint64_t_ref = 6, uint64_t_var = 0;
   bool bool_ref = true, bool_var = false;
   char char_ref = 'A', char_var = '\0';
-  CStdString CStdString_ref = "test CStdString", CStdString_var = "";
-  CStdStringW CStdStringW_ref = L"test CStdStringW", CStdStringW_var = L"";
+  std::string string_ref = "test string", string_var;
+  std::wstring wstring_ref = L"test wstring", wstring_var;
   SYSTEMTIME SYSTEMTIME_ref = { 1, 2, 3, 4, 5, 6, 7, 8 };
   SYSTEMTIME SYSTEMTIME_var = { 0, 0, 0, 0, 0, 0, 0, 0 };
   CVariant CVariant_ref((int)1), CVariant_var;
   std::vector<std::string> strArray_ref, strArray_var;
-  strArray_ref.push_back("test strArray_ref 0");
-  strArray_ref.push_back("test strArray_ref 1");
-  strArray_ref.push_back("test strArray_ref 2");
-  strArray_ref.push_back("test strArray_ref 3");
+  strArray_ref.emplace_back("test strArray_ref 0");
+  strArray_ref.emplace_back("test strArray_ref 1");
+  strArray_ref.emplace_back("test strArray_ref 2");
+  strArray_ref.emplace_back("test strArray_ref 3");
   std::vector<int> iArray_ref, iArray_var;
   iArray_ref.push_back(0);
   iArray_ref.push_back(1);
@@ -368,15 +360,15 @@ TEST_F(TestArchive, MultiTypeArchive)
   arstore << uint64_t_ref;
   arstore << bool_ref;
   arstore << char_ref;
-  arstore << CStdString_ref;
-  arstore << CStdStringW_ref;
+  arstore << string_ref;
+  arstore << wstring_ref;
   arstore << SYSTEMTIME_ref;
   arstore << CVariant_ref;
   arstore << strArray_ref;
   arstore << iArray_ref;
   arstore.Close();
 
-  ASSERT_TRUE((file->Seek(0, SEEK_SET) == 0));
+  ASSERT_EQ(0, file->Seek(0, SEEK_SET));
   CArchive arload(file, CArchive::load);
   EXPECT_TRUE(arload.IsLoading());
   EXPECT_FALSE(arload.IsStoring());
@@ -388,8 +380,8 @@ TEST_F(TestArchive, MultiTypeArchive)
   arload >> uint64_t_var;
   arload >> bool_var;
   arload >> char_var;
-  arload >> CStdString_var;
-  arload >> CStdStringW_var;
+  arload >> string_var;
+  arload >> wstring_var;
   arload >> SYSTEMTIME_var;
   arload >> CVariant_var;
   arload >> strArray_var;
@@ -404,8 +396,8 @@ TEST_F(TestArchive, MultiTypeArchive)
   EXPECT_EQ(uint64_t_ref, uint64_t_var);
   EXPECT_EQ(bool_ref, bool_var);
   EXPECT_EQ(char_ref, char_var);
-  EXPECT_STREQ(CStdString_ref.c_str(), CStdString_var.c_str());
-  EXPECT_STREQ(CStdStringW_ref.c_str(), CStdStringW_var.c_str());
+  EXPECT_STREQ(string_ref.c_str(), string_var.c_str());
+  EXPECT_STREQ(wstring_ref.c_str(), wstring_var.c_str());
   EXPECT_TRUE(!memcmp(&SYSTEMTIME_ref, &SYSTEMTIME_var, sizeof(SYSTEMTIME)));
   EXPECT_TRUE(CVariant_var.isInteger());
   EXPECT_STREQ("test strArray_ref 0", strArray_var.at(0).c_str());

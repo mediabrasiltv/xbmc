@@ -51,10 +51,12 @@ NPT_SET_LOCAL_LOGGER("platinum.media.server.file.delegate")
 |   PLT_FileMediaServerDelegate::PLT_FileMediaServerDelegate
 +---------------------------------------------------------------------*/
 PLT_FileMediaServerDelegate::PLT_FileMediaServerDelegate(const char* url_root, 
-                                                         const char* file_root) :
+                                                         const char* file_root,
+                                                         bool        use_cache) :
     m_UrlRoot(url_root),
     m_FileRoot(file_root),
-    m_FilterUnknownOut(false)
+    m_FilterUnknownOut(false),
+    m_UseCache(use_cache)
 {
     /* Trim excess separators */
     m_FileRoot.TrimRight("/\\");
@@ -77,7 +79,7 @@ PLT_FileMediaServerDelegate::ProcessFileRequest(NPT_HttpRequest&              re
 {
     NPT_HttpUrlQuery query(request.GetUrl().GetQuery());
     
-    PLT_LOG_HTTP_MESSAGE(NPT_LOG_LEVEL_FINE, "PLT_FileMediaServerDelegate::ProcessFileRequest:", &request);
+    PLT_LOG_HTTP_REQUEST(NPT_LOG_LEVEL_FINE, "PLT_FileMediaServerDelegate::ProcessFileRequest:", &request);
     
     if (request.GetMethod().Compare("GET") && request.GetMethod().Compare("HEAD")) {
         response.SetStatus(500, "Internal Server Error");
@@ -175,9 +177,7 @@ PLT_FileMediaServerDelegate::OnBrowseDirectChildren(PLT_ActionReference&        
     /* locate the file from the object ID */
     NPT_String dir;
     NPT_FileInfo info;
-    if (NPT_FAILED(GetFilePath(object_id, dir)) || 
-        NPT_FAILED(NPT_File::GetInfo(dir, &info)) ||
-        info.m_Type != NPT_FileInfo::FILE_TYPE_DIRECTORY) {
+    if (NPT_FAILED(GetFilePath(object_id, dir)) || NPT_FAILED(NPT_File::GetInfo(dir, &info)) || info.m_Type != NPT_FileInfo::FILE_TYPE_DIRECTORY) {
         /* error */
         NPT_LOG_WARNING_1("ObjectID \'%s\' not found or not allowed", object_id);
         action->SetError(701, "No such Object");
@@ -187,15 +187,12 @@ PLT_FileMediaServerDelegate::OnBrowseDirectChildren(PLT_ActionReference&        
     /* get uuid from device via action reference */
     NPT_String uuid = action->GetActionDesc().GetService()->GetDevice()->GetUUID();
     
-    /* Try to get list from cache */
+    /* Try to get list from cache if allowed */
     NPT_Result res;
     NPT_Reference<NPT_List<NPT_String> > entries;
     NPT_TimeStamp cached_entries_time;
-    if (NPT_FAILED(m_DirCache.Get(uuid, dir, entries, &cached_entries_time)) ||
-        cached_entries_time < info.m_ModificationTime) {
-        /* if not found in cache or if current dir has newer modified time
-           fetch fresh new list from source */
-        
+    if (!m_UseCache || NPT_FAILED(m_DirCache.Get(uuid, dir, entries, &cached_entries_time)) || cached_entries_time < info.m_ModificationTime) {
+        /* if not found in cache or if current dir has newer modified time fetch fresh new list from source */
         entries = new NPT_List<NPT_String>();
         res = NPT_File::ListDir(dir, *entries);
         if (NPT_FAILED(res)) {
@@ -211,7 +208,9 @@ PLT_FileMediaServerDelegate::OnBrowseDirectChildren(PLT_ActionReference&        
         }
         
         /* add new list to cache */
-        m_DirCache.Put(uuid, dir, entries, &info.m_ModificationTime);
+        if (m_UseCache) {
+            m_DirCache.Put(uuid, dir, entries, &info.m_ModificationTime);
+        }
     }
     
     unsigned long cur_index = 0;
@@ -253,7 +252,7 @@ PLT_FileMediaServerDelegate::OnBrowseDirectChildren(PLT_ActionReference&        
     
     didl += didl_footer;
     
-    NPT_LOG_FINE_6("BrowseDirectChildren from %s returning %d-%d/%d objects (%d out of %d requested)",
+    NPT_LOG_FINE_6("BrowseDirectChildren from %s returning %d-%lu/%lu objects (%lu out of %d requested)",
                    (const char*)context.GetLocalAddress().GetIpAddress().ToString(),
                    starting_index, starting_index+num_returned, total_matches, num_returned, requested_count);
     

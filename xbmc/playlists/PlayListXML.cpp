@@ -1,31 +1,20 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "PlayListXML.h"
-#include "filesystem/File.h"
+
 #include "Util.h"
-#include "utils/RegExp.h"
-#include "utils/log.h"
+#include "filesystem/File.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
-#include "utils/XMLUtils.h"
 #include "utils/Variant.h"
+#include "utils/XMLUtils.h"
+#include "utils/log.h"
 
 using namespace PLAYLIST;
 using namespace XFILE;
@@ -63,23 +52,21 @@ using namespace XFILE;
 */
 
 
-CPlayListXML::CPlayListXML(void)
-{}
+CPlayListXML::CPlayListXML(void) = default;
 
-CPlayListXML::~CPlayListXML(void)
-{}
+CPlayListXML::~CPlayListXML(void) = default;
 
 
-static inline CStdString GetString( const TiXmlElement* pRootElement, const char *tagName )
+static inline std::string GetString( const TiXmlElement* pRootElement, const char *tagName )
 {
-  CStdString strValue;
+  std::string strValue;
   if ( XMLUtils::GetString(pRootElement, tagName, strValue) )
     return strValue;
 
   return "";
 }
 
-bool CPlayListXML::Load( const CStdString& strFileName )
+bool CPlayListXML::Load( const std::string& strFileName )
 {
   CXBMCTinyXML xmlDoc;
 
@@ -109,12 +96,12 @@ bool CPlayListXML::Load( const CStdString& strFileName )
   while ( pSet )
   {
     // Get parameters
-    CStdString url = GetString( pSet, "url" );
-    CStdString name = GetString( pSet, "name" );
-    CStdString category = GetString( pSet, "category" );
-    CStdString lang = GetString( pSet, "lang" );
-    CStdString channel = GetString( pSet, "channel" );
-    CStdString lockpass = GetString( pSet, "lockpassword" );
+    std::string url = GetString( pSet, "url" );
+    std::string name = GetString( pSet, "name" );
+    std::string category = GetString( pSet, "category" );
+    std::string lang = GetString( pSet, "lang" );
+    std::string channel = GetString( pSet, "channel" );
+    std::string lockpass = GetString( pSet, "lockpassword" );
 
     // If url is empty, it doesn't make any sense
     if ( !url.empty() )
@@ -127,7 +114,7 @@ bool CPlayListXML::Load( const CStdString& strFileName )
        if ( !lang.empty() )
          name += " [" + lang + "]";
 
-       CStdString info = name;
+       std::string info = name;
        CFileItemPtr newItem( new CFileItem(info) );
        newItem->SetPath(url);
 
@@ -165,17 +152,17 @@ bool CPlayListXML::Load( const CStdString& strFileName )
 }
 
 
-void CPlayListXML::Save(const CStdString& strFileName) const
+void CPlayListXML::Save(const std::string& strFileName) const
 {
   if (!m_vecItems.size()) return ;
-  CStdString strPlaylist = CUtil::MakeLegalPath(strFileName);
+  std::string strPlaylist = CUtil::MakeLegalPath(strFileName);
   CFile file;
   if (!file.OpenForWrite(strPlaylist, true))
   {
     CLog::Log(LOGERROR, "Could not save WPL playlist: [%s]", strPlaylist.c_str());
     return ;
   }
-  CStdString write;
+  std::string write;
   write += StringUtils::Format("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
   write += StringUtils::Format("<streams>\n");
   for (int i = 0; i < (int)m_vecItems.size(); ++i)

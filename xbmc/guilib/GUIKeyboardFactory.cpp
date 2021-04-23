@@ -1,49 +1,40 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "Application.h"
-#include "ApplicationMessenger.h"
+#include "ServiceBroker.h"
+#include "GUIComponent.h"
+#include "messaging/ApplicationMessenger.h"
 #include "LocalizeStrings.h"
 #include "GUIKeyboardFactory.h"
-#include "dialogs/GUIDialogOK.h"
 #include "GUIUserMessages.h"
 #include "GUIWindowManager.h"
+#include "messaging/helpers/DialogOKHelper.h"
 #include "settings/Settings.h"
-#include "utils/md5.h"
+#include "settings/SettingsComponent.h"
+#include "utils/Digest.h"
 #include "utils/StringUtils.h"
+#include "utils/Variant.h"
 
 #include "dialogs/GUIDialogKeyboardGeneric.h"
-#if defined(TARGET_DARWIN_IOS)
-#include "osx/ios/IOSKeyboard.h"
-#include "windowing/WindowingFactory.h"
+#if defined(TARGET_DARWIN_EMBEDDED)
+#include "dialogs/GUIDialogKeyboardTouch.h"
 #endif
 
-CGUIKeyboard *CGUIKeyboardFactory::g_activedKeyboard = NULL;
+using namespace KODI::MESSAGING;
+using KODI::UTILITY::CDigest;
+
+CGUIKeyboard *CGUIKeyboardFactory::g_activeKeyboard = NULL;
 FILTERING CGUIKeyboardFactory::m_filtering = FILTERING_NONE;
 
-CGUIKeyboardFactory::CGUIKeyboardFactory(void)
-{
-}
+CGUIKeyboardFactory::CGUIKeyboardFactory(void) = default;
 
-CGUIKeyboardFactory::~CGUIKeyboardFactory(void)
-{}
+CGUIKeyboardFactory::~CGUIKeyboardFactory(void) = default;
 
 void CGUIKeyboardFactory::keyTypedCB(CGUIKeyboard *ref, const std::string &typedString)
 {
@@ -56,12 +47,12 @@ void CGUIKeyboardFactory::keyTypedCB(CGUIKeyboard *ref, const std::string &typed
       case FILTERING_SEARCH:
         message.SetParam1(GUI_MSG_SEARCH_UPDATE);
         message.SetStringParam(typedString);
-        CApplicationMessenger::Get().SendGUIMessage(message, g_windowManager.GetActiveWindow());
+        CApplicationMessenger::GetInstance().SendGUIMessage(message, CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow());
         break;
       case FILTERING_CURRENT:
         message.SetParam1(GUI_MSG_FILTER_ITEMS);
         message.SetStringParam(typedString);
-        CApplicationMessenger::Get().SendGUIMessage(message);
+        CApplicationMessenger::GetInstance().SendGUIMessage(message);
         break;
       case FILTERING_NONE:
         break;
@@ -72,20 +63,18 @@ void CGUIKeyboardFactory::keyTypedCB(CGUIKeyboard *ref, const std::string &typed
 
 bool CGUIKeyboardFactory::SendTextToActiveKeyboard(const std::string &aTextString, bool closeKeyboard /* = false */)
 {
-  if (!g_activedKeyboard)
+  if (!g_activeKeyboard)
     return false;
-  return g_activedKeyboard->SetTextToKeyboard(aTextString, closeKeyboard);
+  return g_activeKeyboard->SetTextToKeyboard(aTextString, closeKeyboard);
 }
 
 
 // Show keyboard with initial value (aTextString) and replace with result string.
 // Returns: true  - successful display and input (empty result may return true or false depending on parameter)
 //          false - unsuccessful display of the keyboard or cancelled editing
-bool CGUIKeyboardFactory::ShowAndGetInput(CStdString& aTextString, const CVariant &heading, bool allowEmptyResult, bool hiddenInput /* = false */, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndGetInput(std::string& aTextString, CVariant heading, bool allowEmptyResult, bool hiddenInput /* = false */, unsigned int autoCloseMs /* = 0 */)
 {
   bool confirmed = false;
-  CGUIKeyboard *kb = NULL;
-  bool needsFreeing = true;
   //heading can be a string or a localization id
   std::string headingStr;
   if (heading.isString())
@@ -93,25 +82,31 @@ bool CGUIKeyboardFactory::ShowAndGetInput(CStdString& aTextString, const CVarian
   else if (heading.isInteger() && heading.asInteger())
     headingStr = g_localizeStrings.Get((uint32_t)heading.asInteger());
 
-#if defined(TARGET_DARWIN_IOS) && !defined(TARGET_DARWIN_IOS_ATV2)
-  if (g_Windowing.GetCurrentScreen() == 0)
-    kb = new CIOSKeyboard();
+  bool useKodiKeyboard = true;
+#if defined(TARGET_DARWIN_EMBEDDED)
+#if defined(TARGET_DARWIN_TVOS)
+  useKodiKeyboard = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+      CSettings::SETTING_INPUT_APPLEUSEKODIKEYBOARD);
+#else
+  useKodiKeyboard = false;
+#endif // defined(TARGET_DARWIN_TVOS)
 #endif
 
-  if(!kb)
-  {
-    kb = (CGUIDialogKeyboardGeneric*)g_windowManager.GetWindow(WINDOW_DIALOG_KEYBOARD);
-    needsFreeing = false;
-  }
+  auto& winManager = CServiceBroker::GetGUI()->GetWindowManager();
+  CGUIKeyboard* kb = nullptr;
+  if (useKodiKeyboard)
+    kb = winManager.GetWindow<CGUIDialogKeyboardGeneric>(WINDOW_DIALOG_KEYBOARD);
+#if defined(TARGET_DARWIN_EMBEDDED)
+  else
+    kb = winManager.GetWindow<CGUIDialogKeyboardTouch>(WINDOW_DIALOG_KEYBOARD_TOUCH);
+#endif // defined(TARGET_DARWIN_EMBEDDED)
 
-  if(kb)
+  if (kb)
   {
-    g_activedKeyboard = kb;
+    g_activeKeyboard = kb;
     kb->startAutoCloseTimer(autoCloseMs);
     confirmed = kb->ShowAndGetInput(keyTypedCB, aTextString, aTextString, headingStr, hiddenInput);
-    g_activedKeyboard = NULL;
-    if(needsFreeing)
-      delete kb;
+    g_activeKeyboard = NULL;
   }
 
   if (confirmed)
@@ -123,26 +118,26 @@ bool CGUIKeyboardFactory::ShowAndGetInput(CStdString& aTextString, const CVarian
   return confirmed;
 }
 
-bool CGUIKeyboardFactory::ShowAndGetInput(CStdString& aTextString, bool allowEmptyResult, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndGetInput(std::string& aTextString, bool allowEmptyResult, unsigned int autoCloseMs /* = 0 */)
 {
-  return ShowAndGetInput(aTextString, "", allowEmptyResult, false, autoCloseMs);
+  return ShowAndGetInput(aTextString, CVariant{""}, allowEmptyResult, false, autoCloseMs);
 }
 
 // Shows keyboard and prompts for a password.
 // Differs from ShowAndVerifyNewPassword() in that no second verification is necessary.
-bool CGUIKeyboardFactory::ShowAndGetNewPassword(CStdString& newPassword, const CVariant &heading, bool allowEmpty, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndGetNewPassword(std::string& newPassword, CVariant heading, bool allowEmpty, unsigned int autoCloseMs /* = 0 */)
 {
   return ShowAndGetInput(newPassword, heading, allowEmpty, true, autoCloseMs);
 }
 
 // Shows keyboard and prompts for a password.
 // Differs from ShowAndVerifyNewPassword() in that no second verification is necessary.
-bool CGUIKeyboardFactory::ShowAndGetNewPassword(CStdString& newPassword, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndGetNewPassword(std::string& newPassword, unsigned int autoCloseMs /* = 0 */)
 {
   return ShowAndGetNewPassword(newPassword, 12340, false, autoCloseMs);
 }
 
-bool CGUIKeyboardFactory::ShowAndGetFilter(CStdString &filter, bool searching, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndGetFilter(std::string &filter, bool searching, unsigned int autoCloseMs /* = 0 */)
 {
   m_filtering = searching ? FILTERING_SEARCH : FILTERING_CURRENT;
   bool ret = ShowAndGetInput(filter, searching ? 16017 : 16028, true, false, autoCloseMs);
@@ -156,16 +151,16 @@ bool CGUIKeyboardFactory::ShowAndGetFilter(CStdString &filter, bool searching, u
 // \param heading Heading to display
 // \param allowEmpty Whether a blank password is valid or not.
 // \return true if successful display and user input entry/re-entry. false if unsuccessful display, no user input, or canceled editing.
-bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(CStdString& newPassword, const CVariant &heading, bool allowEmpty, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(std::string& newPassword, CVariant heading, bool allowEmpty, unsigned int autoCloseMs /* = 0 */)
 {
   // Prompt user for password input
-  CStdString userInput = "";
+  std::string userInput;
   if (!ShowAndGetInput(userInput, heading, allowEmpty, true, autoCloseMs))
   { // user cancelled, or invalid input
     return false;
   }
   // success - verify the password
-  CStdString checkInput = "";
+  std::string checkInput;
   if (!ShowAndGetInput(checkInput, 12341, allowEmpty, true, autoCloseMs))
   { // user cancelled, or invalid input
     return false;
@@ -173,22 +168,19 @@ bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(CStdString& newPassword, cons
   // check the password
   if (checkInput == userInput)
   {
-    XBMC::XBMC_MD5 md5state;
-    md5state.append(userInput);
-    md5state.getDigest(newPassword);
-    StringUtils::ToLower(newPassword);
+    newPassword = CDigest::Calculate(CDigest::Type::MD5, userInput);
     return true;
   }
-  CGUIDialogOK::ShowAndGetInput(12341, 12344, 0, 0);
+  HELPERS::ShowOKDialogText(CVariant{12341}, CVariant{12344});
   return false;
 }
 
 // \brief Show keyboard twice to get and confirm a user-entered password string.
 // \param strNewPassword Overwritten with user input if return=true.
 // \return true if successful display and user input entry/re-entry. false if unsuccessful display, no user input, or canceled editing.
-bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(CStdString& newPassword, unsigned int autoCloseMs /* = 0 */)
+bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(std::string& newPassword, unsigned int autoCloseMs /* = 0 */)
 {
-  CStdString heading = g_localizeStrings.Get(12340);
+  std::string heading = g_localizeStrings.Get(12340);
   return ShowAndVerifyNewPassword(newPassword, heading, false, autoCloseMs);
 }
 
@@ -197,31 +189,26 @@ bool CGUIKeyboardFactory::ShowAndVerifyNewPassword(CStdString& newPassword, unsi
 // \param dlgHeading String shown on dialog title. Converts to localized string if contains a positive integer.
 // \param iRetries If greater than 0, shows "Incorrect password, %d retries left" on dialog line 2, else line 2 is blank.
 // \return 0 if successful display and user input. 1 if unsuccessful input. -1 if no user input or canceled editing.
-int CGUIKeyboardFactory::ShowAndVerifyPassword(CStdString& strPassword, const CStdString& strHeading, int iRetries, unsigned int autoCloseMs /* = 0 */)
+int CGUIKeyboardFactory::ShowAndVerifyPassword(std::string& strPassword, const std::string& strHeading, int iRetries, unsigned int autoCloseMs /* = 0 */)
 {
-  CStdString strHeadingTemp;
+  std::string strHeadingTemp;
   if (1 > iRetries && strHeading.size())
     strHeadingTemp = strHeading;
   else
     strHeadingTemp = StringUtils::Format("%s - %i %s",
                                          g_localizeStrings.Get(12326).c_str(),
-                                         CSettings::Get().GetInt("masterlock.maxretries") - iRetries,
+                                         CServiceBroker::GetSettingsComponent()->GetSettings()->GetInt(CSettings::SETTING_MASTERLOCK_MAXRETRIES) - iRetries,
                                          g_localizeStrings.Get(12343).c_str());
 
-  CStdString strUserInput = "";
-  if (!ShowAndGetInput(strUserInput, strHeadingTemp, false, true, autoCloseMs))  //bool hiddenInput = false/true ? TODO: GUI Setting to enable disable this feature y/n?
+  std::string strUserInput;
+  //! @todo GUI Setting to enable disable this feature y/n?
+  if (!ShowAndGetInput(strUserInput, strHeadingTemp, false, true, autoCloseMs))  //bool hiddenInput = false/true ?
     return -1; // user canceled out
 
   if (!strPassword.empty())
   {
-    if (strPassword == strUserInput)
-      return 0;
-
-    CStdString md5pword2;
-    XBMC::XBMC_MD5 md5state;
-    md5state.append(strUserInput);
-    md5state.getDigest(md5pword2);
-    if (strPassword.Equals(md5pword2))
+    std::string md5pword2 = CDigest::Calculate(CDigest::Type::MD5, strUserInput);
+    if (StringUtils::EqualsNoCase(strPassword, md5pword2))
       return 0;     // user entered correct password
     else return 1;  // user must have entered an incorrect password
   }
@@ -229,10 +216,7 @@ int CGUIKeyboardFactory::ShowAndVerifyPassword(CStdString& strPassword, const CS
   {
     if (!strUserInput.empty())
     {
-      XBMC::XBMC_MD5 md5state;
-      md5state.append(strUserInput);
-      md5state.getDigest(strPassword);
-      StringUtils::ToLower(strPassword);
+      strPassword = CDigest::Calculate(CDigest::Type::MD5, strUserInput);
       return 0; // user entered correct password
     }
     else return 1;

@@ -1,35 +1,17 @@
 /*
- *      Copyright (C) 2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2013-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "system.h"
 #include "Texture.h"
-#include "windowing/WindowingFactory.h"
-#include "utils/log.h"
-#include "utils/GLUtils.h"
-#include "guilib/TextureManager.h"
-#include "utils/URIUtils.h"
-
-#if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXImage.h"
-
-using namespace std;
+#include "guilib/TextureManager.h"
+#include "utils/GLUtils.h"
+#include "utils/URIUtils.h"
+#include "utils/log.h"
 
 /************************************************************************/
 /*    CPiTexture                                                       */
@@ -95,6 +77,10 @@ void CPiTexture::LoadToGPU()
     // Bind the texture object
     glBindTexture(GL_TEXTURE_2D, m_texture);
 
+    if (IsMipmapped()) {
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+      glGenerateMipmap(GL_TEXTURE_2D);
+    }
     m_loadedToGPU = true;
     return;
   }
@@ -112,7 +98,7 @@ void CPiTexture::Update(unsigned int width, unsigned int height, unsigned int pi
   CGLTexture::Update(width, height, pitch, format, pixels, loadToGPU);
 }
 
-bool CPiTexture::LoadFromFileInternal(const CStdString& texturePath, unsigned int maxWidth, unsigned int maxHeight, bool autoRotate, bool requirePixels, const std::string& strMimeType)
+bool CPiTexture::LoadFromFileInternal(const std::string& texturePath, unsigned int maxWidth, unsigned int maxHeight, bool requirePixels, const std::string& strMimeType)
 {
   if (URIUtils::HasExtension(texturePath, ".jpg|.tbn"))
   {
@@ -142,13 +128,10 @@ bool CPiTexture::LoadFromFileInternal(const CStdString& texturePath, unsigned in
       if (okay)
       {
         m_hasAlpha = false;
-        if (autoRotate && orientation)
-          m_orientation = orientation - 1;
+        m_orientation = orientation;
         return true;
       }
     }
   }
-  return CGLTexture::LoadFromFileInternal(texturePath, maxWidth, maxHeight, autoRotate, requirePixels);
+  return CGLTexture::LoadFromFileInternal(texturePath, maxWidth, maxHeight, requirePixels);
 }
-
-#endif

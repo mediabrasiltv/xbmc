@@ -1,134 +1,56 @@
 /*
- *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2012-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "PVRDirectory.h"
-#include "FileItem.h"
-#include "Util.h"
-#include "URL.h"
-#include "utils/log.h"
-#include "utils/URIUtils.h"
-#include "guilib/LocalizeStrings.h"
 
-#include "pvr/PVRManager.h"
-#include "pvr/channels/PVRChannelGroupsContainer.h"
-#include "pvr/channels/PVRChannelGroup.h"
-#include "pvr/recordings/PVRRecordings.h"
-#include "pvr/timers/PVRTimers.h"
+#include "pvr/filesystem/PVRGUIDirectory.h"
 
-using namespace std;
 using namespace XFILE;
 using namespace PVR;
 
-CPVRDirectory::CPVRDirectory()
+CPVRDirectory::CPVRDirectory() = default;
+
+CPVRDirectory::~CPVRDirectory() = default;
+
+bool CPVRDirectory::Exists(const CURL& url)
 {
+  const CPVRGUIDirectory dir(url);
+  return dir.Exists();
 }
 
-CPVRDirectory::~CPVRDirectory()
+bool CPVRDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 {
+  const CPVRGUIDirectory dir(url);
+  return dir.GetDirectory(items);
 }
 
-bool CPVRDirectory::Exists(const char* strPath)
+bool CPVRDirectory::SupportsWriteFileOperations(const std::string& strPath)
 {
-  CStdString directory(strPath);
-  if (directory.substr(0,17) == "pvr://recordings/")
-    return true;
-  else
-    return false;
+  const CPVRGUIDirectory dir(strPath);
+  return dir.SupportsWriteFileOperations();
 }
 
-bool CPVRDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+bool CPVRDirectory::HasTVRecordings()
 {
-  CStdString base(strPath);
-  URIUtils::RemoveSlashAtEnd(base);
-
-  CURL url(strPath);
-  CStdString fileName = url.GetFileName();
-  URIUtils::RemoveSlashAtEnd(fileName);
-  CLog::Log(LOGDEBUG, "CPVRDirectory::GetDirectory(%s)", base.c_str());
-  items.SetCacheToDisc(CFileItemList::CACHE_NEVER);
-
-  if (!g_PVRManager.IsStarted())
-    return false;
-
-  if (fileName == "")
-  {
-    CFileItemPtr item;
-
-    item.reset(new CFileItem(base + "/channels/", true));
-    item->SetLabel(g_localizeStrings.Get(19019));
-    item->SetLabelPreformated(true);
-    items.Add(item);
-
-    item.reset(new CFileItem(base + "/recordings/", true));
-    item->SetLabel(g_localizeStrings.Get(19017));
-    item->SetLabelPreformated(true);
-    items.Add(item);
-
-    item.reset(new CFileItem(base + "/timers/", true));
-    item->SetLabel(g_localizeStrings.Get(19040));
-    item->SetLabelPreformated(true);
-    items.Add(item);
-
-    item.reset(new CFileItem(base + "/guide/", true));
-    item->SetLabel(g_localizeStrings.Get(19029));
-    item->SetLabelPreformated(true);
-    items.Add(item);
-
-    // Sort by name only. Labels are preformated.
-    items.AddSortMethod(SortByLabel, 551 /* Name */, LABEL_MASKS("%L", "", "%L", ""));
-
-    return true;
-  }
-  else if (StringUtils::StartsWith(fileName, "recordings"))
-  {
-    return g_PVRRecordings->GetDirectory(strPath, items);
-  }
-  else if (StringUtils::StartsWith(fileName, "channels"))
-  {
-    return g_PVRChannelGroups->GetDirectory(strPath, items);
-  }
-  else if (StringUtils::StartsWith(fileName, "timers"))
-  {
-    return g_PVRTimers->GetDirectory(strPath, items);
-  }
-
-  return false;
+  return CPVRGUIDirectory::HasTVRecordings();
 }
 
-bool CPVRDirectory::SupportsWriteFileOperations(const CStdString& strPath)
+bool CPVRDirectory::HasDeletedTVRecordings()
 {
-  CURL url(strPath);
-  CStdString filename = url.GetFileName();
-
-  return URIUtils::IsPVRRecording(filename);
+  return CPVRGUIDirectory::HasDeletedTVRecordings();
 }
 
-bool CPVRDirectory::IsLiveTV(const CStdString& strPath)
+bool CPVRDirectory::HasRadioRecordings()
 {
-  CURL url(strPath);
-  CStdString filename = url.GetFileName();
-
-  return URIUtils::IsLiveTV(filename);
+  return CPVRGUIDirectory::HasRadioRecordings();
 }
 
-bool CPVRDirectory::HasRecordings()
+bool CPVRDirectory::HasDeletedRadioRecordings()
 {
-  return g_PVRRecordings->GetNumRecordings() > 0;
+  return CPVRGUIDirectory::HasDeletedRadioRecordings();
 }

@@ -92,7 +92,7 @@ PLT_MediaServer::~PLT_MediaServer()
 NPT_Result
 PLT_MediaServer::SetupServices()
 {
-    PLT_Service* service;
+    NPT_Reference<PLT_Service> service;
 
     {
         service = new PLT_Service(
@@ -101,7 +101,7 @@ PLT_MediaServer::SetupServices()
             "urn:upnp-org:serviceId:ContentDirectory",
             "ContentDirectory");
         NPT_CHECK_FATAL(service->SetSCPDXML((const char*) MS_ContentDirectorywSearchSCPD));
-        NPT_CHECK_FATAL(AddService(service));
+        NPT_CHECK_FATAL(AddService(service.AsPointer()));
         
         service->SetStateVariable("ContainerUpdateIDs", "");
         service->SetStateVariableRate("ContainerUpdateIDs", NPT_TimeInterval(2.));
@@ -109,6 +109,9 @@ PLT_MediaServer::SetupServices()
         service->SetStateVariableRate("SystemUpdateID", NPT_TimeInterval(2.));
         service->SetStateVariable("SearchCapability", "@id,@refID,dc:title,upnp:class,upnp:genre,upnp:artist,upnp:author,upnp:author@role,upnp:album,dc:creator,res@size,res@duration,res@protocolInfo,res@protection,dc:publisher,dc:language,upnp:originalTrackNumber,dc:date,upnp:producer,upnp:rating,upnp:actor,upnp:director,upnp:toc,dc:description,microsoft:userRatingInStars,microsoft:userEffectiveRatingInStars,microsoft:userRating,microsoft:userEffectiveRating,microsoft:serviceProvider,microsoft:artistAlbumArtist,microsoft:artistPerformer,microsoft:artistConductor,microsoft:authorComposer,microsoft:authorOriginalLyricist,microsoft:authorWriter,upnp:userAnnotation,upnp:channelName,upnp:longDescription,upnp:programTitle");
         service->SetStateVariable("SortCapability", "dc:title,upnp:genre,upnp:album,dc:creator,res@size,res@duration,res@bitrate,dc:publisher,dc:language,upnp:originalTrackNumber,dc:date,upnp:producer,upnp:rating,upnp:actor,upnp:director,upnp:toc,dc:description,microsoft:year,microsoft:userRatingInStars,microsoft:userEffectiveRatingInStars,microsoft:userRating,microsoft:userEffectiveRating,microsoft:serviceProvider,microsoft:artistAlbumArtist,microsoft:artistPerformer,microsoft:artistConductor,microsoft:authorComposer,microsoft:authorOriginalLyricist,microsoft:authorWriter,microsoft:sourceUrl,upnp:userAnnotation,upnp:channelName,upnp:longDescription,upnp:programTitle");
+        
+        service.Detach();
+        service = NULL;
     }
 
     {
@@ -118,11 +121,14 @@ PLT_MediaServer::SetupServices()
             "urn:upnp-org:serviceId:ConnectionManager",
             "ConnectionManager");
         NPT_CHECK_FATAL(service->SetSCPDXML((const char*) MS_ConnectionManagerSCPD));
-        NPT_CHECK_FATAL(AddService(service));
+        NPT_CHECK_FATAL(AddService(service.AsPointer()));
         
         service->SetStateVariable("CurrentConnectionIDs", "0");
         service->SetStateVariable("SinkProtocolInfo", "");
         service->SetStateVariable("SourceProtocolInfo", "http-get:*:*:*");
+        
+        service.Detach();
+        service = NULL;
     }
 
     return NPT_SUCCESS;
@@ -394,7 +400,8 @@ PLT_MediaServer::ParseTagList(const NPT_String& updates, NPT_Map<NPT_String,NPT_
     for (NPT_List<NPT_XmlNode*>::Iterator children = didl_partial->GetChildren().GetFirstItem(); children; children++) {
         NPT_XmlElementNode* child = (*children)->AsElementNode();
         if (!child) continue;
-        tags[child->GetTag()] = *child->GetText();
+        const NPT_String *txt = child->GetText();
+        tags[child->GetTag()] = txt ? *txt : "";
     }
 
     return NPT_SUCCESS;
@@ -624,7 +631,7 @@ args:
     msg = "Invalid args";
 
 failure:
-    NPT_LOG_WARNING(msg);
+    NPT_LOG_WARNING_1("%s", msg);
     action->SetError(err, msg);
     return NPT_FAILURE;
 }

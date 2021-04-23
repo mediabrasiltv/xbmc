@@ -52,6 +52,15 @@
 class PLT_DeviceHost;
 
 /*----------------------------------------------------------------------
+|   PLT_SsdpAnnounceType
++---------------------------------------------------------------------*/
+typedef enum {
+    PLT_ANNOUNCETYPE_BYEBYE,
+    PLT_ANNOUNCETYPE_ALIVE,
+    PLT_ANNOUNCETYPE_UPDATE
+} PLT_SsdpAnnounceType;
+
+/*----------------------------------------------------------------------
 |   PLT_SsdpPacketListener class
 +---------------------------------------------------------------------*/
 /**
@@ -153,10 +162,10 @@ public:
         m_Device(device), m_RemoteAddr(remote_addr), m_ST(st) {}
 
 protected:
-    virtual ~PLT_SsdpDeviceSearchResponseTask() {}
+    ~PLT_SsdpDeviceSearchResponseTask() override {}
 
     // PLT_ThreadTask methods
-    virtual void DoRun();
+    void DoRun() override;
     
 protected:
     PLT_DeviceHost*     m_Device;
@@ -174,15 +183,15 @@ protected:
 class PLT_SsdpAnnounceInterfaceIterator
 {
 public:
-    PLT_SsdpAnnounceInterfaceIterator(PLT_DeviceHost* device, bool is_byebye = false, bool broadcast = false) :
-        m_Device(device), m_IsByeBye(is_byebye), m_Broadcast(broadcast) {}
+    PLT_SsdpAnnounceInterfaceIterator(PLT_DeviceHost* device, PLT_SsdpAnnounceType type, bool broadcast = false) :
+        m_Device(device), m_Type(type), m_Broadcast(broadcast) {}
       
     NPT_Result operator()(NPT_NetworkInterface*& if_addr) const;
-    
+
 private:
-    PLT_DeviceHost* m_Device;
-    bool            m_IsByeBye;
-    bool            m_Broadcast;
+    PLT_DeviceHost*         m_Device;
+    PLT_SsdpAnnounceType    m_Type;
+    bool                    m_Broadcast;
 };
 
 /*----------------------------------------------------------------------
@@ -226,14 +235,15 @@ public:
                                bool             is_byebye_first = false,
                                bool             extra_broadcast = false) : 
         m_Device(device), 
-        m_Repeat(repeat), m_IsByeByeFirst(is_byebye_first), 
+        m_Repeat(repeat),
+        m_IsByeByeFirst(is_byebye_first),
         m_ExtraBroadcast(extra_broadcast) {}
 
 protected:
-    virtual ~PLT_SsdpDeviceAnnounceTask() {}
+    ~PLT_SsdpDeviceAnnounceTask() override {}
 
     // PLT_ThreadTask methods
-    virtual void DoRun();
+    void DoRun() override;
 
 protected:
     PLT_DeviceHost*             m_Device;
@@ -321,16 +331,19 @@ public:
         m_Listeners.Remove(listener);
         return NPT_SUCCESS;
     }
+    
+    // PLT_Task methods
+    void DoAbort() override;
 
 protected:
-    virtual ~PLT_SsdpListenTask() {}
+    ~PLT_SsdpListenTask() override {}
 
     // PLT_HttpServerSocketTask methods
-    NPT_Result GetInputStream(NPT_InputStreamReference& stream);
-    NPT_Result GetInfo(NPT_SocketInfo& info);
+    NPT_Result GetInputStream(NPT_InputStreamReference& stream) override;
+    NPT_Result GetInfo(NPT_SocketInfo& info) override;
     NPT_Result SetupResponse(NPT_HttpRequest&              request, 
                              const NPT_HttpRequestContext& context,
-                             NPT_HttpResponse&             response);
+                             NPT_HttpResponse&             response) override;
 
 protected:
     PLT_InputDatagramStreamReference  m_Datagram;
@@ -354,11 +367,11 @@ public:
                        NPT_TimeInterval                frequency = NPT_TimeInterval(0.)); // pass 0 for one time
 
 protected:
-    virtual ~PLT_SsdpSearchTask();
+    ~PLT_SsdpSearchTask() override;
 
     // PLT_ThreadTask methods
-    virtual void DoAbort();
-    virtual void DoRun();
+    void DoAbort() override;
+    void DoRun() override;
 
     virtual NPT_Result ProcessResponse(NPT_Result                    res, 
                                        const NPT_HttpRequest&        request,  

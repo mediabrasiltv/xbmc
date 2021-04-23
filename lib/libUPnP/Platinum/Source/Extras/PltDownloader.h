@@ -49,8 +49,6 @@ class PLT_Downloader;
 /*----------------------------------------------------------------------
 |   types
 +---------------------------------------------------------------------*/
-typedef PLT_HttpClientTask<PLT_Downloader> PLT_HttpDownloadTask;
-
 typedef enum {
     PLT_DOWNLOADER_IDLE,
     PLT_DOWNLOADER_STARTED,
@@ -62,31 +60,29 @@ typedef enum {
 /*----------------------------------------------------------------------
 |   PLT_Downloader class
 +---------------------------------------------------------------------*/
-class PLT_Downloader
+class PLT_Downloader : public PLT_HttpClientSocketTask
 {
 public:
-    PLT_Downloader(PLT_TaskManager*           task_manager, 
-                   NPT_HttpUrl&               url, 
+    PLT_Downloader(NPT_HttpUrl&               url, 
                    NPT_OutputStreamReference& output);
-    virtual ~PLT_Downloader();
-
-    NPT_Result Start();
-    NPT_Result Stop();
+    ~PLT_Downloader() override;
+    
     Plt_DowloaderState GetState() { return m_State; }
 
     // PLT_HttpClientTask method
     NPT_Result ProcessResponse(NPT_Result                    res, 
                                const NPT_HttpRequest&        request, 
                                const NPT_HttpRequestContext& context, 
-                               NPT_HttpResponse*             response);
+                               NPT_HttpResponse*             response) override;
 
-
+protected:
+    void DoRun() override;
+    void DoAbort() override;
+    
 private:
     // members
     NPT_HttpUrl               m_URL;
     NPT_OutputStreamReference m_Output;
-    PLT_TaskManager*          m_TaskManager;
-    PLT_HttpDownloadTask*     m_Task;
     Plt_DowloaderState        m_State;
 };
 

@@ -1,39 +1,32 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
+
 #pragma once
 
-#include "StdString.h"
+#include <string>
+#include <vector>
 
 class CURL;
+class CAdvancedSettings;
 
 class URIUtils
 {
 public:
-  URIUtils(void);
-  virtual ~URIUtils(void);
-  static bool IsInPath(const CStdString &uri, const CStdString &baseURI);
+  static void RegisterAdvancedSettings(const CAdvancedSettings& advancedSettings);
+  static void UnregisterAdvancedSettings();
 
-  static CStdString GetDirectory(const CStdString &strFilePath);
-  static const CStdString GetFileName(const CStdString& strFileNameAndPath);
+  static std::string GetDirectory(const std::string &strFilePath);
 
-  static CStdString GetExtension(const CStdString& strFileName);
+  static std::string GetFileName(const CURL& url);
+  static std::string GetFileName(const std::string& strFileNameAndPath);
+
+  static std::string GetExtension(const CURL& url);
+  static std::string GetExtension(const std::string& strFileName);
 
   /*!
    \brief Check if there is a file extension
@@ -42,32 +35,37 @@ public:
    \note Returns false when strFileName is empty.
    \sa GetExtension
    */
-  static bool HasExtension(const CStdString& strFileName);
+  static bool HasExtension(const std::string& strFileName);
 
   /*!
    \brief Check if filename have any of the listed extensions
    \param strFileName Path or URL to check
-   \param strExtensions List of '.' prefixed lowercase extensions seperated with '|'
+   \param strExtensions List of '.' prefixed lowercase extensions separated with '|'
    \return \e true if strFileName have any one of the extensions.
    \note The check is case insensitive for strFileName, but requires
          strExtensions to be lowercase. Returns false when strFileName or
          strExtensions is empty.
    \sa GetExtension
    */
-  static bool HasExtension(const CStdString& strFileName, const CStdString& strExtensions);
+  static bool HasExtension(const std::string& strFileName, const std::string& strExtensions);
+  static bool HasExtension(const CURL& url, const std::string& strExtensions);
 
-  static void RemoveExtension(CStdString& strFileName);
-  static CStdString ReplaceExtension(const CStdString& strFile,
-                                     const CStdString& strNewExtension);
-  static void Split(const CStdString& strFileNameAndPath, 
-                    CStdString& strPath, CStdString& strFileName);
-  static void Split(const std::string& strFileNameAndPath, 
+  static void RemoveExtension(std::string& strFileName);
+  static std::string ReplaceExtension(const std::string& strFile,
+                                     const std::string& strNewExtension);
+  static void Split(const std::string& strFileNameAndPath,
                     std::string& strPath, std::string& strFileName);
-  static CStdStringArray SplitPath(const CStdString& strPath);
+  static std::vector<std::string> SplitPath(const std::string& strPath);
 
-  static void GetCommonPath(CStdString& strPath, const CStdString& strPath2);
-  static CStdString GetParentPath(const CStdString& strPath);
-  static bool GetParentPath(const CStdString& strPath, CStdString& strParent);
+  static void GetCommonPath(std::string& strPath, const std::string& strPath2);
+  static std::string GetParentPath(const std::string& strPath);
+  static bool GetParentPath(const std::string& strPath, std::string& strParent);
+
+  /*! \brief Retrieve the base path, accounting for stacks and files in rars.
+   \param strPath path.
+   \return the folder that contains the item.
+   */
+  static std::string GetBasePath(const std::string& strPath);
 
   /* \brief Change the base path of a URL: fromPath/fromFile -> toPath/toFile
     Handles changes in path separator and filename URL encoding if necessary to derive toFile.
@@ -76,62 +74,96 @@ public:
     \param toPath the base path of the resulting URL
     \return the full path.
    */
-  static std::string ChangeBasePath(const std::string &fromPath, const std::string &fromFile, const std::string &toPath);
+  static std::string ChangeBasePath(const std::string &fromPath, const std::string &fromFile, const std::string &toPath, const bool &bAddPath = true);
 
-  static CStdString SubstitutePath(const CStdString& strPath, bool reverse = false);
+  static CURL SubstitutePath(const CURL& url, bool reverse = false);
+  static std::string SubstitutePath(const std::string& strPath, bool reverse = false);
 
-  static bool IsAddonsPath(const CStdString& strFile);
-  static bool IsSourcesPath(const CStdString& strFile);
-  static bool IsCDDA(const CStdString& strFile);
-  static bool IsDAAP(const CStdString& strFile);
-  static bool IsDAV(const CStdString& strFile);
-  static bool IsDOSPath(const CStdString &path);
-  static bool IsDVD(const CStdString& strFile);
-  static bool IsFTP(const CStdString& strFile);
-  static bool IsHD(const CStdString& strFileName);
-  static bool IsHDHomeRun(const CStdString& strFile);
-  static bool IsSlingbox(const CStdString& strFile);
-  static bool IsHTSP(const CStdString& strFile);
-  static bool IsInArchive(const CStdString& strFile);
-  static bool IsInRAR(const CStdString& strFile);
+  /*! \brief Check whether a URL is a given URL scheme.
+   Comparison is case-insensitive as per RFC1738
+   \param url a std::string path.
+   \param type a lower-case scheme name, e.g. "smb".
+   \return true if the url is of the given scheme, false otherwise.
+   \sa PathHasParent, PathEquals
+   */
+  static bool IsProtocol(const std::string& url, const std::string& type);
+
+  /*! \brief Check whether a path has a given parent.
+   Comparison is case-sensitive.
+   Use IsProtocol() to compare the protocol portion only.
+   \param path a std::string path.
+   \param parent the string the parent of the path should be compared against.
+   \param translate whether to translate any special paths into real paths
+   \return true if the path has the given parent string, false otherwise.
+   \sa IsProtocol, PathEquals
+   */
+  static bool PathHasParent(std::string path, std::string parent, bool translate = false);
+
+  /*! \brief Check whether a path equals another path.
+   Comparison is case-sensitive.
+   \param path1 a std::string path.
+   \param path2 the second path the path should be compared against.
+   \param ignoreTrailingSlash ignore any trailing slashes in both paths
+   \return true if the paths are equal, false otherwise.
+   \sa IsProtocol, PathHasParent
+   */
+  static bool PathEquals(std::string path1, std::string path2, bool ignoreTrailingSlash = false, bool ignoreURLOptions = false);
+
+  static bool IsAddonsPath(const std::string& strFile);
+  static bool IsSourcesPath(const std::string& strFile);
+  static bool IsCDDA(const std::string& strFile);
+  static bool IsDAV(const std::string& strFile);
+  static bool IsDOSPath(const std::string &path);
+  static bool IsDVD(const std::string& strFile);
+  static bool IsFTP(const std::string& strFile);
+  static bool IsHTTP(const std::string& strFile);
+  static bool IsUDP(const std::string& strFile);
+  static bool IsTCP(const std::string& strFile);
+  static bool IsHD(const std::string& strFileName);
+  static bool IsInArchive(const std::string& strFile);
+  static bool IsInRAR(const std::string& strFile);
+  static bool IsInternetStream(const std::string& path, bool bStrictCheck = false);
   static bool IsInternetStream(const CURL& url, bool bStrictCheck = false);
-  static bool IsInAPK(const CStdString& strFile);
-  static bool IsInZIP(const CStdString& strFile);
-  static bool IsISO9660(const CStdString& strFile);
-  static bool IsLiveTV(const CStdString& strFile);
-  static bool IsPVRRecording(const CStdString& strFile);
-  static bool IsMultiPath(const CStdString& strPath);
-  static bool IsMusicDb(const CStdString& strFile);
-  static bool IsMythTV(const CStdString& strFile);
-  static bool IsNfs(const CStdString& strFile);  
-  static bool IsAfp(const CStdString& strFile);    
-  static bool IsOnDVD(const CStdString& strFile);
-  static bool IsOnLAN(const CStdString& strFile);
-  static bool IsHostOnLAN(const CStdString& hostName, bool offLineCheck = false);
-  static bool IsPlugin(const CStdString& strFile);
-  static bool IsScript(const CStdString& strFile);
-  static bool IsRAR(const CStdString& strFile);
-  static bool IsRemote(const CStdString& strFile);
-  static bool IsSmb(const CStdString& strFile);
-  static bool IsSpecial(const CStdString& strFile);
-  static bool IsStack(const CStdString& strFile);
-  static bool IsTuxBox(const CStdString& strFile);
-  static bool IsUPnP(const CStdString& strFile);
-  static bool IsURL(const CStdString& strFile);
-  static bool IsVideoDb(const CStdString& strFile);
-  static bool IsVTP(const CStdString& strFile);
-  static bool IsAPK(const CStdString& strFile);
-  static bool IsZIP(const CStdString& strFile);
-  static bool IsArchive(const CStdString& strFile);
-  static bool IsBluray(const CStdString& strFile);
-  static bool IsAndroidApp(const CStdString& strFile);
-  static bool IsLibraryFolder(const CStdString& strFile);
+  static bool IsInAPK(const std::string& strFile);
+  static bool IsInZIP(const std::string& strFile);
+  static bool IsISO9660(const std::string& strFile);
+  static bool IsLiveTV(const std::string& strFile);
+  static bool IsPVRRecording(const std::string& strFile);
+  static bool IsPVRRecordingFileOrFolder(const std::string& strFile);
+  static bool IsMultiPath(const std::string& strPath);
+  static bool IsMusicDb(const std::string& strFile);
+  static bool IsNfs(const std::string& strFile);
+  static bool IsOnDVD(const std::string& strFile);
+  static bool IsOnLAN(const std::string& strFile);
+  static bool IsHostOnLAN(const std::string& hostName, bool offLineCheck = false);
+  static bool IsPlugin(const std::string& strFile);
+  static bool IsScript(const std::string& strFile);
+  static bool IsRAR(const std::string& strFile);
+  static bool IsRemote(const std::string& strFile);
+  static bool IsSmb(const std::string& strFile);
+  static bool IsSpecial(const std::string& strFile);
+  static bool IsStack(const std::string& strFile);
+  static bool IsUPnP(const std::string& strFile);
+  static bool IsURL(const std::string& strFile);
+  static bool IsVideoDb(const std::string& strFile);
+  static bool IsAPK(const std::string& strFile);
+  static bool IsZIP(const std::string& strFile);
+  static bool IsArchive(const std::string& strFile);
+  static bool IsBluray(const std::string& strFile);
+  static bool IsAndroidApp(const std::string& strFile);
+  static bool IsLibraryFolder(const std::string& strFile);
   static bool IsLibraryContent(const std::string& strFile);
+  static bool IsPVR(const std::string& strFile);
+  static bool IsPVRChannel(const std::string& strFile);
+  static bool IsPVRChannelGroup(const std::string& strFile);
+  static bool IsPVRGuideItem(const std::string& strFile);
+  static bool IsUsingFastSwitch(const std::string& strFile);
 
+  static std::string AppendSlash(std::string strFolder);
   static void AddSlashAtEnd(std::string& strFolder);
   static bool HasSlashAtEnd(const std::string& strFile, bool checkURL = false);
   static void RemoveSlashAtEnd(std::string& strFolder);
-  static bool CompareWithoutSlashAtEnd(const CStdString& strPath1, const CStdString& strPath2);
+  static bool CompareWithoutSlashAtEnd(const std::string& strPath1, const std::string& strPath2);
   static std::string FixSlashesAndDups(const std::string& path, const char slashCharacter = '/', const size_t startFrom = 0);
   /**
    * Convert path to form without duplicated slashes and without relative directories
@@ -146,17 +178,22 @@ public:
    */
   static std::string CanonicalizePath(const std::string& path, const char slashCharacter = '\\');
 
-  static void CreateArchivePath(CStdString& strUrlPath,
-                                const CStdString& strType,
-                                const CStdString& strArchivePath,
-                                const CStdString& strFilePathInArchive,
-                                const CStdString& strPwd="");
+  static CURL CreateArchivePath(const std::string& type,
+                                const CURL& archiveUrl,
+                                const std::string& pathInArchive = "",
+                                const std::string& password = "");
 
-  static CStdString AddFileToFolder(const CStdString &strFolder, const CStdString &strFile);
+  static std::string AddFileToFolder(const std::string& strFolder, const std::string& strFile);
+  template <typename... T>
+  static std::string AddFileToFolder(const std::string& strFolder, const std::string& strFile, T... args)
+  {
+    auto newPath = AddFileToFolder(strFolder, strFile);
+    return AddFileToFolder(newPath, args...);
+  }
 
-  static bool ProtocolHasParentInHostname(const CStdString& prot);
-  static bool ProtocolHasEncodedHostname(const CStdString& prot);
-  static bool ProtocolHasEncodedFilename(const CStdString& prot);
+  static bool HasParentInHostname(const CURL& url);
+  static bool HasEncodedHostname(const CURL& url);
+  static bool HasEncodedFilename(const CURL& url);
 
   /*!
    \brief Cleans up the given path by resolving "." and ".."
@@ -186,5 +223,7 @@ public:
 
 private:
   static std::string resolvePath(const std::string &path);
+
+  static const CAdvancedSettings* m_advancedSettings;
 };
 

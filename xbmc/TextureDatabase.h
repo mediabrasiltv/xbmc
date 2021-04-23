@@ -1,44 +1,38 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #pragma once
 
-#include "dbwrappers/Database.h"
 #include "TextureCacheJob.h"
-#include "playlists/SmartPlayList.h"
+#include "dbwrappers/Database.h"
+#include "dbwrappers/DatabaseQuery.h"
+
+#include <string>
+#include <vector>
 
 class CVariant;
 
 class CTextureRule : public CDatabaseQueryRule
 {
 public:
-  CTextureRule() {};
-  virtual ~CTextureRule() {};
+  CTextureRule() = default;
+  ~CTextureRule() override = default;
 
   static void GetAvailableFields(std::vector<std::string> &fieldList);
 protected:
-  virtual int                 TranslateField(const char *field) const;
-  virtual CStdString          TranslateField(int field) const;
-  virtual CStdString          GetField(int field, const CStdString& type) const;
-  virtual FIELD_TYPE          GetFieldType(int field) const;
-  virtual CStdString          FormatParameter(const CStdString &negate, const CStdString &oper, const CDatabase &db, const CStdString &type) const;
+  int                 TranslateField(const char *field) const override;
+  std::string         TranslateField(int field) const override;
+  std::string         GetField(int field, const std::string& type) const override;
+  FIELD_TYPE          GetFieldType(int field) const override;
+  std::string         FormatParameter(const std::string &negate,
+                                              const std::string &oper,
+                                              const CDatabase &db,
+                                              const std::string &type) const override;
 };
 
 class CTextureUtils
@@ -50,29 +44,29 @@ public:
    \param options which options we need (eg size=thumb)
    \return full wrapped URL of the image file
    */
-  static CStdString GetWrappedImageURL(const CStdString &image, const CStdString &type = "", const CStdString &options = "");
-  static CStdString GetWrappedThumbURL(const CStdString &image);
+  static std::string GetWrappedImageURL(const std::string &image, const std::string &type = "", const std::string &options = "");
+  static std::string GetWrappedThumbURL(const std::string &image);
 
   /*! \brief Unwrap an image://<url_encoded_path> style URL
    Such urls are used for art over the webserver or other users of the VFS
    \param image url of the image
    \return the unwrapped URL, or the original URL if unwrapping is inappropriate.
    */
-  static CStdString UnwrapImageURL(const CStdString &image);
+  static std::string UnwrapImageURL(const std::string &image);
 };
 
 class CTextureDatabase : public CDatabase, public IDatabaseQueryRuleFactory
 {
 public:
   CTextureDatabase();
-  virtual ~CTextureDatabase();
-  virtual bool Open();
+  ~CTextureDatabase() override;
+  bool Open() override;
 
-  bool GetCachedTexture(const CStdString &originalURL, CTextureDetails &details);
-  bool AddCachedTexture(const CStdString &originalURL, const CTextureDetails &details);
-  bool SetCachedTextureValid(const CStdString &originalURL, bool updateable);
-  bool ClearCachedTexture(const CStdString &originalURL, CStdString &cacheFile);
-  bool ClearCachedTexture(int textureID, CStdString &cacheFile);
+  bool GetCachedTexture(const std::string &originalURL, CTextureDetails &details);
+  bool AddCachedTexture(const std::string &originalURL, const CTextureDetails &details);
+  bool SetCachedTextureValid(const std::string &originalURL, bool updateable);
+  bool ClearCachedTexture(const std::string &originalURL, std::string &cacheFile);
+  bool ClearCachedTexture(int textureID, std::string &cacheFile);
   bool IncrementUseCount(const CTextureDetails &details);
 
   /*! \brief Invalidate a previously cached texture
@@ -80,7 +74,7 @@ public:
    next texture load it will be re-cached.
    \param url texture path
    */
-  bool InvalidateCachedTexture(const CStdString &originalURL);
+  bool InvalidateCachedTexture(const std::string &originalURL);
 
   /*! \brief Get a texture associated with the given path
    Used for retrieval of previously discovered images to save
@@ -89,7 +83,7 @@ public:
    \param type type of image to look for
    \return URL of the texture associated with the given path
    */
-  CStdString GetTextureForPath(const CStdString &url, const CStdString &type);
+  std::string GetTextureForPath(const std::string &url, const std::string &type);
 
   /*! \brief Set a texture associated with the given path
    Used for setting of previously discovered images to save
@@ -100,7 +94,7 @@ public:
    \param type type of image to associate
    \param texture URL of the texture to associate with the path
    */
-  void SetTextureForPath(const CStdString &url, const CStdString &type, const CStdString &texture);
+  void SetTextureForPath(const std::string &url, const std::string &type, const std::string &texture);
 
   /*! \brief Clear a texture associated with the given path
    \param url path that was used to find the texture
@@ -108,24 +102,24 @@ public:
    \param texture URL of the texture to associate with the path
    \sa GetTextureForPath, SetTextureForPath
    */
-  void ClearTextureForPath(const CStdString &url, const CStdString &type);
+  void ClearTextureForPath(const std::string &url, const std::string &type);
 
   bool GetTextures(CVariant &items, const Filter &filter);
 
   // rule creation
-  virtual CDatabaseQueryRule *CreateRule() const;
-  virtual CDatabaseQueryRuleCombination *CreateCombination() const;
+  CDatabaseQueryRule *CreateRule() const override;
+  CDatabaseQueryRuleCombination *CreateCombination() const override;
 protected:
   /*! \brief retrieve a hash for the given url
    Computes a hash of the current url to use for lookups in the database
    \param url url to hash
    \return a hash for this url
    */
-  unsigned int GetURLHash(const CStdString &url) const;
+  unsigned int GetURLHash(const std::string &url) const;
 
-  virtual void CreateTables();
-  virtual void CreateAnalytics();
-  virtual void UpdateTables(int version);
-  virtual int GetSchemaVersion() const { return 13; };
-  const char *GetBaseDBName() const { return "Textures"; };
+  void CreateTables() override;
+  void CreateAnalytics() override;
+  void UpdateTables(int version) override;
+  int GetSchemaVersion() const override { return 13; };
+  const char *GetBaseDBName() const override { return "Textures"; };
 };

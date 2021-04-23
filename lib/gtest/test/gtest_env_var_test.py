@@ -47,8 +47,8 @@ environ = os.environ.copy()
 
 def AssertEq(expected, actual):
   if expected != actual:
-    print 'Expected: %s' % (expected,)
-    print '  Actual: %s' % (actual,)
+    print('Expected: %s' % (expected,))
+    print('  Actual: %s' % (actual,))
     raise AssertionError
 
 
@@ -67,8 +67,7 @@ def GetFlag(flag):
   args = [COMMAND]
   if flag is not None:
     args += [flag]
-  return gtest_test_utils.Subprocess(args, env=environ,
-                                     capture_stderr=False).output
+  return gtest_test_utils.Subprocess(args, env=environ).output
 
 
 def TestFlag(flag, test_val, default_val):
@@ -88,6 +87,7 @@ class GTestEnvVarTest(gtest_test_utils.TestCase):
     TestFlag('break_on_failure', '1', '0')
     TestFlag('color', 'yes', 'auto')
     TestFlag('filter', 'FooTest.Bar', '*')
+    SetEnvVar('XML_OUTPUT_FILE', None) # For 'output' test
     TestFlag('output', 'xml:tmp/foo.xml', '')
     TestFlag('print_time', '0', '1')
     TestFlag('repeat', '999', '1')
@@ -99,6 +99,19 @@ class GTestEnvVarTest(gtest_test_utils.TestCase):
       TestFlag('death_test_use_fork', '1', '0')
       TestFlag('stack_trace_depth', '0', '100')
 
+  def testXmlOutputFile(self):
+    """Tests that $XML_OUTPUT_FILE affects the output flag."""
+
+    SetEnvVar('GTEST_OUTPUT', None)
+    SetEnvVar('XML_OUTPUT_FILE', 'tmp/bar.xml')
+    AssertEq('xml:tmp/bar.xml', GetFlag('output'))
+
+  def testXmlOutputFileOverride(self):
+    """Tests that $XML_OUTPUT_FILE is overridden by $GTEST_OUTPUT"""
+
+    SetEnvVar('GTEST_OUTPUT', 'xml:tmp/foo.xml')
+    SetEnvVar('XML_OUTPUT_FILE', 'tmp/bar.xml')
+    AssertEq('xml:tmp/foo.xml', GetFlag('output'))
 
 if __name__ == '__main__':
   gtest_test_utils.Main()

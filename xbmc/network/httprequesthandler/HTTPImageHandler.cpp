@@ -1,58 +1,51 @@
 /*
- *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2012-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "HTTPImageHandler.h"
-#include "network/WebServer.h"
+
 #include "URL.h"
 #include "filesystem/ImageFile.h"
+#include "network/WebServer.h"
+#include "utils/FileUtils.h"
 
-using namespace std;
 
-bool CHTTPImageHandler::CheckHTTPRequest(const HTTPRequest &request)
+CHTTPImageHandler::CHTTPImageHandler(const HTTPRequest &request)
+  : CHTTPFileHandler(request)
 {
-  return (request.url.find("/image/") == 0);
-}
+  std::string file;
+  int responseStatus = MHD_HTTP_BAD_REQUEST;
 
-int CHTTPImageHandler::HandleHTTPRequest(const HTTPRequest &request)
-{
-  if (request.url.size() > 7)
+  // resolve the URL into a file path and a HTTP response status
+  if (m_request.pathUrl.size() > 7)
   {
-    m_path = request.url.substr(7);
+    file = m_request.pathUrl.substr(7);
 
     XFILE::CImageFile imageFile;
-    if (imageFile.Exists(m_path))
+    const CURL pathToUrl(file);
+    if (imageFile.Exists(pathToUrl) && CFileUtils::CheckFileAccessAllowed(file))
     {
-      m_responseCode = MHD_HTTP_OK;
-      m_responseType = HTTPFileDownload;
+      responseStatus = MHD_HTTP_OK;
+      struct __stat64 statBuffer;
+      if (imageFile.Stat(pathToUrl, &statBuffer) == 0)
+      {
+        SetLastModifiedDate(&statBuffer);
+        SetCanBeCached(true);
+      }
     }
     else
-    {
-      m_responseCode = MHD_HTTP_NOT_FOUND;
-      m_responseType = HTTPError;
-    }
-  }
-  else
-  {
-    m_responseCode = MHD_HTTP_BAD_REQUEST;
-    m_responseType = HTTPError;
+      responseStatus = MHD_HTTP_NOT_FOUND;
   }
 
-  return MHD_YES;
+  // set the file and the HTTP response status
+  SetFile(file, responseStatus);
+}
+
+bool CHTTPImageHandler::CanHandleRequest(const HTTPRequest &request) const
+{
+  return request.pathUrl.find("/image/") == 0;
 }

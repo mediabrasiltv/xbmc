@@ -1,33 +1,19 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include <dlfcn.h>
 #include "SoLoader.h"
-#include "utils/StdString.h"
+
 #include "filesystem/SpecialProtocol.h"
 #include "utils/log.h"
-#if defined(TARGET_ANDROID)
-#include "android/loader/AndroidDyload.h"
-#endif
 
-SoLoader::SoLoader(const char *so, bool bGlobal) : LibraryLoader(so)
+#include <dlfcn.h>
+
+SoLoader::SoLoader(const std::string &so, bool bGlobal) : LibraryLoader(so)
 {
   m_soHandle = NULL;
   m_bGlobal = bGlobal;
@@ -45,8 +31,7 @@ bool SoLoader::Load()
   if (m_soHandle != NULL)
     return true;
 
-  CStdString strFileName= CSpecialProtocol::TranslatePath(GetFileName());
-  int flags = RTLD_LAZY;
+  std::string strFileName= CSpecialProtocol::TranslatePath(GetFileName());
   if (strFileName == "xbmc.so")
   {
     CLog::Log(LOGDEBUG, "Loading Internal Library\n");
@@ -55,12 +40,8 @@ bool SoLoader::Load()
   else
   {
     CLog::Log(LOGDEBUG, "Loading: %s\n", strFileName.c_str());
-#if defined(TARGET_ANDROID)
-    CAndroidDyload temp;
-    m_soHandle = temp.Open(strFileName.c_str());
-#else
+    int flags = RTLD_LAZY;
     m_soHandle = dlopen(strFileName.c_str(), flags);
-#endif
     if (!m_soHandle)
     {
       CLog::Log(LOGERROR, "Unable to load %s, reason: %s", strFileName.c_str(), dlerror());
@@ -73,16 +54,10 @@ bool SoLoader::Load()
 
 void SoLoader::Unload()
 {
-  CLog::Log(LOGDEBUG, "Unloading: %s\n", GetName());
 
   if (m_soHandle)
   {
-#if defined(TARGET_ANDROID)
-    CAndroidDyload temp;
-    if (temp.Close(m_soHandle) != 0)
-#else
     if (dlclose(m_soHandle) != 0)
-#endif
        CLog::Log(LOGERROR, "Unable to unload %s, reason: %s", GetName(), dlerror());
   }
   m_bLoaded = false;

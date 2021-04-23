@@ -1,72 +1,120 @@
 /*
- *      Copyright (C) 2012-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2012-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "GUIViewStatePVR.h"
-#include "GUIWindowPVR.h"
-#include "GUIWindowPVRCommon.h"
-#include "guilib/GUIWindowManager.h"
+
+#include "FileItem.h"
+#include "ServiceBroker.h"
+#include "pvr/recordings/PVRRecordingsPath.h"
+#include "pvr/timers/PVRTimersPath.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
+#include "view/ViewStateSettings.h"
 
 using namespace PVR;
 
-CGUIViewStatePVR::CGUIViewStatePVR(const CFileItemList& items) :
-  CGUIViewState(items)
+CGUIViewStateWindowPVRChannels::CGUIViewStateWindowPVRChannels(const int windowId, const CFileItemList& items) : CGUIViewStatePVR(windowId, items)
 {
-  PVRWindow ActiveView = GetActiveView();
-  if (ActiveView == PVR_WINDOW_RECORDINGS)
-  {
-    AddSortMethod(SortByLabel, 551, LABEL_MASKS("%L", "%I", "%L", ""), CSettings::Get().GetBool("filelists.ignorethewhensorting") ? SortAttributeIgnoreArticle : SortAttributeNone);  // FileName, Size | Foldername, empty
-    AddSortMethod(SortBySize, 553, LABEL_MASKS("%L", "%I", "%L", "%I"));  // FileName, Size | Foldername, Size
-    AddSortMethod(SortByDate, 552, LABEL_MASKS("%L", "%J", "%L", "%J"));  // FileName, Date | Foldername, Date
-    AddSortMethod(SortByFile, 561, LABEL_MASKS("%L", "%I", "%L", ""));  // Filename, Size | FolderName, empty
+  AddSortMethod(SortByChannelNumber,       549,   LABEL_MASKS("%L", "", "%L", ""));      // "Number"         : Filename, empty | Foldername, empty
+  AddSortMethod(SortByChannel,             551,   LABEL_MASKS("%L", "", "%L", ""));      // "Name"           : Filename, empty | Foldername, empty
+  AddSortMethod(SortByLastPlayed,          568,   LABEL_MASKS("%L", "%p", "%L", "%p"));  // "Last played"    : Filename, LastPlayed | Foldername, LastPlayed
+  AddSortMethod(SortByClientChannelOrder,  19315, LABEL_MASKS("%L", "", "%L", ""));      // "Backend number" : Filename, empty | Foldername, empty
 
-    // Sort recordings view by date as default
-    SetSortMethod(SortByDate);
-  }
+  // Default sorting
+  SetSortMethod(SortByChannelNumber);
 
-  LoadViewState(items.GetPath(), ActiveView == PVR_WINDOW_UNKNOWN ? WINDOW_PVR : WINDOW_PVR + 100 - ActiveView );
+  LoadViewState("pvr://channels/", m_windowId);
 }
 
-PVRWindow CGUIViewStatePVR::GetActiveView()
+void CGUIViewStateWindowPVRChannels::SaveViewState()
 {
-  PVRWindow returnWindow = PVR_WINDOW_UNKNOWN;
-
-  int iActiveWindow = g_windowManager.GetActiveWindow();
-  if (iActiveWindow == WINDOW_PVR)
-  {
-    CGUIWindowPVR *pWindow = (CGUIWindowPVR *) g_windowManager.GetWindow(WINDOW_PVR);
-    CGUIWindowPVRCommon *pActiveView = NULL;
-    if (pWindow && (pActiveView = pWindow->GetActiveView()) != NULL)
-      returnWindow = pActiveView->GetWindowId();
-  }
-
-  return returnWindow;
+  SaveViewToDb("pvr://channels/", m_windowId, CViewStateSettings::GetInstance().Get("pvrchannels"));
 }
 
-void CGUIViewStatePVR::SaveViewState(void) 
+CGUIViewStateWindowPVRRecordings::CGUIViewStateWindowPVRRecordings(const int windowId, const CFileItemList& items) : CGUIViewStatePVR(windowId, items)
 {
-  PVRWindow ActiveView = GetActiveView();
-  SaveViewToDb(m_items.GetPath(), ActiveView == PVR_WINDOW_UNKNOWN ? WINDOW_PVR : WINDOW_PVR + 100 - ActiveView, NULL);
+  AddSortMethod(SortByLabel, 551, LABEL_MASKS("%L", "%d", "%L", ""),    // "Name"     : Filename, DateTime | Foldername, empty
+                CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING)
+                  ? SortAttributeIgnoreArticle
+                  : SortAttributeNone);
+  AddSortMethod(SortByDate,  552, LABEL_MASKS("%L", "%d", "%L", "%d")); // "Date"     : Filename, DateTime | Foldername, DateTime
+  AddSortMethod(SortByTime,  180, LABEL_MASKS("%L", "%D", "%L", ""));   // "Duration" : Filename, Duration | Foldername, empty
+  AddSortMethod(SortByFile,  561, LABEL_MASKS("%L", "%d", "%L", ""));   // "File"     : Filename, DateTime | Foldername, empty
+
+  // Default sorting
+  SetSortMethod(SortByDate);
+
+  LoadViewState(items.GetPath(), m_windowId);
 }
 
-bool CGUIViewStatePVR::HideParentDirItems(void)
+void CGUIViewStateWindowPVRRecordings::SaveViewState()
 {
-  return (CGUIViewState::HideParentDirItems() || PVR_WINDOW_RECORDINGS != GetActiveView() || m_items.GetPath() == "pvr://recordings/");
+  SaveViewToDb(m_items.GetPath(), m_windowId, CViewStateSettings::GetInstance().Get("pvrrecordings"));
+}
+
+bool CGUIViewStateWindowPVRRecordings::HideParentDirItems()
+{
+  return (CGUIViewState::HideParentDirItems() || CPVRRecordingsPath(m_items.GetPath()).IsRecordingsRoot());
+}
+
+CGUIViewStateWindowPVRGuide::CGUIViewStateWindowPVRGuide(const int windowId, const CFileItemList& items) : CGUIViewStatePVR(windowId, items)
+{
+  AddSortMethod(SortByChannelNumber,                           549,   LABEL_MASKS("%L", "", "%L", ""));     // "Number"         : Filename, empty | Foldername, empty
+  AddSortMethod(SortByChannel,                                 551,   LABEL_MASKS("%L", "", "%L", ""));     // "Name"           : Filename, empty | Foldername, empty
+  AddSortMethod(SortByLastPlayed,    SortAttributeIgnoreLabel, 568,   LABEL_MASKS("%L", "%p", "%L", "%p")); // "Last played"    : Filename, LastPlayed | Foldername, LastPlayed
+  AddSortMethod(SortByClientChannelOrder,                      19315, LABEL_MASKS("%L", "", "%L", ""));     // "Backend number" : Filename, empty | Foldername, empty
+
+  // Default sorting
+  SetSortMethod(SortByChannelNumber);
+
+  LoadViewState("pvr://guide/", m_windowId);
+}
+
+void CGUIViewStateWindowPVRGuide::SaveViewState()
+{
+  SaveViewToDb("pvr://guide/", m_windowId, CViewStateSettings::GetInstance().Get("pvrguide"));
+}
+
+CGUIViewStateWindowPVRTimers::CGUIViewStateWindowPVRTimers(const int windowId, const CFileItemList& items) : CGUIViewStatePVR(windowId, items)
+{
+  int sortAttributes(CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_FILELISTS_IGNORETHEWHENSORTING) ? SortAttributeIgnoreArticle : SortAttributeNone);
+  sortAttributes |= SortAttributeIgnoreFolders;
+  AddSortMethod(SortByLabel, static_cast<SortAttribute>(sortAttributes), 551, LABEL_MASKS("%L", "", "%L", ""));     // "Name" : Filename, empty | Foldername, empty
+  AddSortMethod(SortByDate,  static_cast<SortAttribute>(sortAttributes), 552, LABEL_MASKS("%L", "%d", "%L", "%d")); // "Date" : Filename, DateTime | Foldername, DateTime
+
+  // Default sorting
+  SetSortMethod(SortByDate);
+
+  LoadViewState("pvr://timers/", m_windowId);
+}
+
+void CGUIViewStateWindowPVRTimers::SaveViewState()
+{
+  SaveViewToDb("pvr://timers/", m_windowId, CViewStateSettings::GetInstance().Get("pvrtimers"));
+}
+
+bool CGUIViewStateWindowPVRTimers::HideParentDirItems()
+{
+  return (CGUIViewState::HideParentDirItems() || CPVRTimersPath(m_items.GetPath()).IsTimersRoot());
+}
+
+CGUIViewStateWindowPVRSearch::CGUIViewStateWindowPVRSearch(const int windowId, const CFileItemList& items) : CGUIViewStatePVR(windowId, items)
+{
+  AddSortMethod(SortByLabel, 551, LABEL_MASKS("%L", "", "%L", ""));     // "Name" : Filename, empty | Foldername, empty
+  AddSortMethod(SortByDate,  552, LABEL_MASKS("%L", "%d", "%L", "%d")); // "Date" : Filename, DateTime | Foldername, DateTime
+
+  // Default sorting
+  SetSortMethod(SortByDate);
+
+  LoadViewState("pvr://search/", m_windowId);
+}
+
+void CGUIViewStateWindowPVRSearch::SaveViewState()
+{
+  SaveViewToDb("pvr://search/", m_windowId, CViewStateSettings::GetInstance().Get("pvrsearch"));
 }

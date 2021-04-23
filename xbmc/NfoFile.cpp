@@ -1,56 +1,41 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 // NfoFile.cpp: implementation of the CNfoFile class.
 //
 //////////////////////////////////////////////////////////////////////
 
 #include "NfoFile.h"
-#include "video/VideoInfoDownloader.h"
-#include "addons/AddonManager.h"
-#include "filesystem/File.h"
+
 #include "FileItem.h"
+#include "ServiceBroker.h"
+#include "addons/AddonManager.h"
+#include "addons/AddonSystemSettings.h"
+#include "filesystem/File.h"
 #include "music/Album.h"
 #include "music/Artist.h"
-#include "settings/Settings.h"
-#include "utils/log.h"
+#include "video/VideoInfoDownloader.h"
 
+#include <string>
 #include <vector>
 
-using namespace std;
 using namespace XFILE;
 using namespace ADDON;
 
-CNfoFile::NFOResult CNfoFile::Create(const CStdString& strPath, const ScraperPtr& info, int episode)
+CInfoScanner::INFO_TYPE CNfoFile::Create(const std::string& strPath,
+                                         const ScraperPtr& info, int episode)
 {
   m_info = info; // assume we can use these settings
   m_type = ScraperTypeFromContent(info->Content());
-  if (FAILED(Load(strPath)))
-    return NO_NFO;
+  if (Load(strPath) != 0)
+    return CInfoScanner::NO_NFO;
 
   CFileItemList items;
   bool bNfo=false;
-
-  AddonPtr addon;
-  ScraperPtr defaultScraper;
-  if (CAddonMgr::Get().GetDefault(m_type, addon))
-    defaultScraper = boost::dynamic_pointer_cast<CScraper>(addon);
 
   if (m_type == ADDON_SCRAPER_ALBUMS)
   {
@@ -62,7 +47,8 @@ CNfoFile::NFOResult CNfoFile::Create(const CStdString& strPath, const ScraperPtr
     CArtist artist;
     bNfo = GetDetails(artist);
   }
-  else if (m_type == ADDON_SCRAPER_TVSHOWS || m_type == ADDON_SCRAPER_MOVIES || m_type == ADDON_SCRAPER_MUSICVIDEOS)
+  else if (m_type == ADDON_SCRAPER_TVSHOWS || m_type == ADDON_SCRAPER_MOVIES
+           || m_type == ADDON_SCRAPER_MUSICVIDEOS)
   {
     // first check if it's an XML file with the info we need
     CVideoInfoTag details;
@@ -70,11 +56,12 @@ CNfoFile::NFOResult CNfoFile::Create(const CStdString& strPath, const ScraperPtr
     if (episode > -1 && bNfo && m_type == ADDON_SCRAPER_TVSHOWS)
     {
       int infos=0;
-      m_headofdoc = strstr(m_headofdoc,"<episodedetails");
-      bNfo = GetDetails(details);
-      while (m_headofdoc && details.m_iEpisode != episode)
+      while (m_headPos != std::string::npos && details.m_iEpisode != episode)
       {
-        m_headofdoc = strstr(m_headofdoc+1,"<episodedetails");
+        m_headPos = m_doc.find("<episodedetails", m_headPos + 1);
+        if (m_headPos == std::string::npos)
+          break;
+
         bNfo  = GetDetails(details);
         infos++;
       }
@@ -82,68 +69,53 @@ CNfoFile::NFOResult CNfoFile::Create(const CStdString& strPath, const ScraperPtr
       {
         bNfo = false;
         details.Reset();
-        m_headofdoc = m_doc;
+        m_headPos = 0;
         if (infos == 1) // still allow differing nfo/file numbers for single ep nfo's
           bNfo = GetDetails(details);
       }
     }
   }
 
-  vector<ScraperPtr> vecScrapers;
-
-  // add selected scraper - first proirity
-  if (m_info)
-    vecScrapers.push_back(m_info);
-
-  // Add all scrapers except selected and default
-  VECADDONS addons;
-  CAddonMgr::Get().GetAddons(m_type,addons);
-
-  for (unsigned i = 0; i < addons.size(); ++i)
-  {
-    ScraperPtr scraper = boost::dynamic_pointer_cast<CScraper>(addons[i]);
-
-    // skip if scraper requires settings and there's nothing set yet
-    if (scraper->RequiresSettings() && !scraper->HasUserSettings())
-      continue;
-
-    if( (!m_info || m_info->ID() != scraper->ID()) && (!defaultScraper || defaultScraper->ID() != scraper->ID()) )
-      vecScrapers.push_back(scraper);
-  }
-
-  // add default scraper - not user selectable so it's last priority
-  if( defaultScraper && (!m_info || m_info->ID() != defaultScraper->ID()) &&
-      ( !defaultScraper->RequiresSettings() || defaultScraper->HasUserSettings() ) )
-    vecScrapers.push_back(defaultScraper);
+  std::vector<ScraperPtr> vecScrapers = GetScrapers(m_type, m_info);
 
   // search ..
   int res = -1;
-  for (unsigned int i=0;i<vecScrapers.size();++i)
-    if ((res = Scrape(vecScrapers[i])) == 0 || res == 2)
+  for (unsigned int i=0; i<vecScrapers.size(); ++i)
+    if ((res = Scrape(vecScrapers[i], m_scurl, m_doc)) == 0 || res == 2)
       break;
 
   if (res == 2)
-    return ERROR_NFO;
+    return CInfoScanner::ERROR_NFO;
   if (bNfo)
-    return m_scurl.m_url.empty() ? FULL_NFO : COMBINED_NFO;
-  return m_scurl.m_url.empty() ? NO_NFO : URL_NFO;
+  {
+    if (m_scurl.m_url.empty())
+    {
+      if (m_doc.find("[scrape url]") != std::string::npos)
+        return CInfoScanner::OVERRIDE_NFO;
+      else
+        return CInfoScanner::FULL_NFO;
+    }
+    else
+      return CInfoScanner::COMBINED_NFO;
+  }
+  return m_scurl.m_url.empty() ? CInfoScanner::NO_NFO : CInfoScanner::URL_NFO;
 }
 
 // return value: 0 - success; 1 - no result; skip; 2 - error
-int CNfoFile::Scrape(ScraperPtr& scraper)
+int CNfoFile::Scrape(ScraperPtr& scraper, CScraperUrl& url,
+                     const std::string& content)
 {
   if (scraper->IsNoop())
   {
-    m_scurl = CScraperUrl();
+    url = CScraperUrl();
     return 0;
   }
-  if (scraper->Type() != m_type)
-    return 1;
+
   scraper->ClearCache();
 
   try
   {
-    m_scurl = scraper->NfoUrl(m_doc);
+    url = scraper->NfoUrl(content);
   }
   catch (const CScraperError &sce)
   {
@@ -152,44 +124,67 @@ int CNfoFile::Scrape(ScraperPtr& scraper)
       return 2;
   }
 
-  if (!m_scurl.m_url.empty())
-    SetScraperInfo(scraper);
-  return m_scurl.m_url.empty() ? 1 : 0;
+  return url.m_url.empty() ? 1 : 0;
 }
 
-int CNfoFile::Load(const CStdString& strFile)
+int CNfoFile::Load(const std::string& strFile)
 {
   Close();
   XFILE::CFile file;
-  if (file.Open(strFile))
+  XFILE::auto_buffer buf;
+  if (file.LoadFile(strFile, buf) > 0)
   {
-    int size = (int)file.GetLength();
-    try
-    {
-      m_doc = new char[size+1];
-      m_headofdoc = m_doc;
-    }
-    catch (...)
-    {
-      CLog::Log(LOGERROR, "%s: Exception while creating file buffer",__FUNCTION__);
-      return 1;
-    }
-    if (!m_doc)
-    {
-      file.Close();
-      return 1;
-    }
-    file.Read(m_doc, size);
-    m_doc[size] = 0;
-    file.Close();
+    m_doc.assign(buf.get(), buf.size());
+    m_headPos = 0;
     return 0;
   }
+  m_doc.clear();
   return 1;
 }
 
 void CNfoFile::Close()
 {
-  delete[] m_doc;
-  m_doc = NULL;
+  m_doc.clear();
+  m_headPos = 0;
   m_scurl.Clear();
+}
+
+std::vector<ScraperPtr> CNfoFile::GetScrapers(TYPE type,
+                                              ScraperPtr selectedScraper)
+{
+  AddonPtr addon;
+  ScraperPtr defaultScraper;
+  if (CAddonSystemSettings::GetInstance().GetActive(type, addon))
+    defaultScraper = std::dynamic_pointer_cast<CScraper>(addon);
+
+  std::vector<ScraperPtr> vecScrapers;
+
+  // add selected scraper - first priority
+  if (selectedScraper)
+    vecScrapers.push_back(selectedScraper);
+
+  // Add all scrapers except selected and default
+  VECADDONS addons;
+  CServiceBroker::GetAddonMgr().GetAddons(addons, type);
+
+  for (auto& addon : addons)
+  {
+    ScraperPtr scraper = std::dynamic_pointer_cast<CScraper>(addon);
+
+    // skip if scraper requires settings and there's nothing set yet
+    if (scraper->RequiresSettings() && !scraper->HasUserSettings())
+      continue;
+
+    if ((!selectedScraper || selectedScraper->ID() != scraper->ID()) &&
+         (!defaultScraper || defaultScraper->ID() != scraper->ID()))
+      vecScrapers.push_back(scraper);
+  }
+
+  // add default scraper - not user selectable so it's last priority
+  if (defaultScraper && (!selectedScraper ||
+                          selectedScraper->ID() != defaultScraper->ID()) &&
+      (!defaultScraper->RequiresSettings() || defaultScraper->HasUserSettings()))
+    vecScrapers.push_back(defaultScraper);
+
+  return vecScrapers;
 }

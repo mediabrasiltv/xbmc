@@ -90,6 +90,20 @@
 #define PLT_FILTER_MASK_LASTPLAYBACK                NPT_UINT64_C(0x0000000200000000)
 #define PLT_FILTER_MASK_PLAYCOUNT                   NPT_UINT64_C(0x0000000400000000)
 
+#define PLT_FILTER_MASK_PUBLISHER                   NPT_UINT64_C(0x0000000800000000)
+
+#define PLT_FILTER_MASK_EPISODE_COUNT               NPT_UINT64_C(0x0000001000000000)
+#define PLT_FILTER_MASK_EPISODE_SEASON              NPT_UINT64_C(0x0000002000000000)
+
+#define PLT_FILTER_MASK_XBMC_DATEADDED              NPT_UINT64_C(0x0000100000000000)
+#define PLT_FILTER_MASK_XBMC_RATING                 NPT_UINT64_C(0x0000200000000000)
+#define PLT_FILTER_MASK_XBMC_VOTES                  NPT_UINT64_C(0x0000400000000000)
+#define PLT_FILTER_MASK_XBMC_ARTWORK                NPT_UINT64_C(0x0000800000000000)
+#define PLT_FILTER_MASK_XBMC_UNIQUE_IDENTIFIER      NPT_UINT64_C(0x0001000000000000)
+#define PLT_FILTER_MASK_XBMC_COUNTRY                NPT_UINT64_C(0x0002000000000000)
+#define PLT_FILTER_MASK_XBMC_USERRATING             NPT_UINT64_C(0x0004000000000000)
+#define PLT_FILTER_MASK_XBMC_LASTPLAYERSTATE        NPT_UINT64_C(0x0008000000000000)
+
 #define PLT_FILTER_FIELD_TITLE                      "dc:title"
 #define PLT_FILTER_FIELD_CREATOR                    "dc:creator"
 #define PLT_FILTER_FIELD_DATE                       "dc:date"
@@ -118,6 +132,7 @@
 #define PLT_FILTER_FIELD_CONTAINER_CHILDCOUNT       "container@childCount"
 #define PLT_FILTER_FIELD_CONTAINER_SEARCHABLE       "container@searchable"
 #define PLT_FILTER_FIELD_REFID                      "@refID"
+#define PLT_FILTER_FIELD_PUBLISHER                  "dc:publisher"
 
 #define PLT_FILTER_FIELD_RES                        "res"
 #define PLT_FILTER_FIELD_RES_DURATION               "res@duration"
@@ -130,11 +145,24 @@
 #define PLT_FILTER_FIELD_RES_NRAUDIOCHANNELS        "res@nrAudioChannels"
 #define PLT_FILTER_FIELD_RES_SAMPLEFREQUENCY        "res@sampleFrequency"
 
+#define PLT_FILTER_FIELD_EPISODE_COUNT              "upnp:episodeCount"
+#define PLT_FILTER_FIELD_EPISODE_SEASON             "upnp:episodeSeason"
+
+#define PLT_FILTER_FIELD_XBMC_LASTPLAYERSTATE       "xbmc:lastPlayerState"
+#define PLT_FILTER_FIELD_XBMC_DATEADDED             "xbmc:dateadded"
+#define PLT_FILTER_FIELD_XBMC_RATING                "xbmc:rating"
+#define PLT_FILTER_FIELD_XBMC_VOTES                 "xbmc:votes"
+#define PLT_FILTER_FIELD_XBMC_ARTWORK               "xbmc:artwork"
+#define PLT_FILTER_FIELD_XBMC_UNIQUE_IDENTIFIER     "xbmc:uniqueidentifier"
+#define PLT_FILTER_FIELD_XBMC_COUNTRY               "xbmc:country"
+#define PLT_FILTER_FIELD_XBMC_USERRATING            "xbmc:userrating"
+
 extern const char* didl_header;
 extern const char* didl_footer;
 extern const char* didl_namespace_dc;
 extern const char* didl_namespace_upnp;
 extern const char* didl_namespace_dlna;
+extern const char* didl_namespace_xbmc;
 
 /*----------------------------------------------------------------------
 |   PLT_Didl

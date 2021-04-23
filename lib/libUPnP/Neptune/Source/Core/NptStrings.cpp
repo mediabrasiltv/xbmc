@@ -1054,7 +1054,7 @@ NPT_String::TrimLeft(const char* chars)
 
     // shift chars to the left
     char* d = m_Chars;
-    GetBuffer()->SetLength(GetLength()-(s-d));
+    GetBuffer()->SetLength(GetLength()-(NPT_Size)(s-d));
     while ((*d++ = *s++)) {};
     return *this;
 }

@@ -38,6 +38,7 @@
 #include "PltHttp.h"
 #include "PltDatagramStream.h"
 #include "PltVersion.h"
+#include "PltUtilities.h"
 
 NPT_SET_LOCAL_LOGGER("platinum.core.http")
 
@@ -65,28 +66,6 @@ class NPT_HttpHeaderFinder
  private:
     // members
     NPT_String m_Name;
-};
-
-/*----------------------------------------------------------------------
-|   NPT_HttpHeaderPrinter
-+---------------------------------------------------------------------*/
-class NPT_HttpHeaderPrinter
-{
-public:
-    // methods
-    NPT_HttpHeaderPrinter(NPT_OutputStreamReference& stream) : 
-        m_Stream(stream) {}
-    NPT_Result operator()(NPT_HttpHeader*& header) const {
-        m_Stream->WriteString(header->GetName());
-        m_Stream->Write(": ", 2);
-        m_Stream->WriteString(header->GetValue());
-        m_Stream->Write("\r\n", 2, NULL);
-        return NPT_SUCCESS;
-    }
-
-private:
-    // members
-    NPT_OutputStreamReference& m_Stream;
 };
 
 /*----------------------------------------------------------------------
@@ -248,22 +227,7 @@ PLT_HttpHelper::ParseBody(const NPT_HttpMessage& message,
     NPT_String body;
     NPT_CHECK_WARNING(GetBody(message, body));
 
-    // parse body
-    NPT_XmlParser parser;
-    NPT_XmlNode*  node;
-    NPT_Result result = parser.Parse(body, node);
-    if (NPT_FAILED(result)) {
-        NPT_LOG_FINEST_1("Failed to parse %s", body.IsEmpty()?"(empty string)":body.GetChars());
-        NPT_CHECK_WARNING(result);
-    }
-    
-    tree = node->AsElementNode();
-    if (!tree) {
-        delete node;
-        return NPT_FAILURE;
-    }
-
-    return NPT_SUCCESS;
+    return PLT_XmlHelper::Parse(body, tree);
 }
 
 /*----------------------------------------------------------------------
@@ -335,48 +299,6 @@ PLT_HttpHelper::SetHost(NPT_HttpRequest& request, const char* host)
 }
 
 /*----------------------------------------------------------------------
-|   PLT_HttpHelper::ToLog
-+---------------------------------------------------------------------*/
-NPT_Result
-PLT_HttpHelper::ToLog(NPT_LoggerReference logger, 
-                      int                 level,
-                      const char*          prefix,
-                      NPT_HttpRequest*    request)
-{
-    if (!request) {
-        NPT_LOG_L(logger, level, "NULL HTTP Request!");
-        return NPT_FAILURE;
-    }
-
-    return ToLog(logger, level, prefix, *request);
-}
-
-/*----------------------------------------------------------------------
-|   PLT_HttpHelper::ToLog
-+---------------------------------------------------------------------*/
-NPT_Result
-PLT_HttpHelper::ToLog(NPT_LoggerReference    logger, 
-                      int                    level,
-                      const char*            prefix, 
-                      const NPT_HttpRequest& request)
-{
-    NPT_COMPILER_UNUSED(logger);
-    NPT_COMPILER_UNUSED(level);
-
-    NPT_StringOutputStreamReference stream(new NPT_StringOutputStream);
-    NPT_OutputStreamReference output = stream;
-    request.GetHeaders().GetHeaders().Apply(NPT_HttpHeaderPrinter(output));
-
-    NPT_LOG_L5(logger, level, "%s\n%s %s %s\n%s", 
-        prefix,
-        (const char*)request.GetMethod(), 
-        (const char*)request.GetUrl().ToRequestString(true), 
-        (const char*)request.GetProtocol(),
-        (const char*)stream->GetString());
-    return NPT_SUCCESS;
-}
-
-/*----------------------------------------------------------------------
 |   PLT_HttpHelper::GetDeviceSignature
 +---------------------------------------------------------------------*/
 PLT_DeviceSignature
@@ -385,10 +307,14 @@ PLT_HttpHelper::GetDeviceSignature(const NPT_HttpRequest& request)
 	const NPT_String* agent  = request.GetHeaders().GetHeaderValue(NPT_HTTP_HEADER_USER_AGENT);
 	const NPT_String* hdr    = request.GetHeaders().GetHeaderValue("X-AV-Client-Info");
     const NPT_String* server = request.GetHeaders().GetHeaderValue(NPT_HTTP_HEADER_SERVER);
+	const NPT_String* dlna_friendly_name = request.GetHeaders().GetHeaderValue("FriendlyName.DLNA.ORG");
+	NPT_LOG_FINEST_2("agent: %s, server: %s", agent?agent->GetChars():"none", server?server->GetChars():"none");
 
 	if ((agent && (agent->Find("XBox", 0, true) >= 0 || agent->Find("Xenon", 0, true) >= 0)) ||
         (server && server->Find("Xbox", 0, true) >= 0)) {
-		return PLT_DEVICE_XBOX;
+		return PLT_DEVICE_XBOX_360;
+	} else if(dlna_friendly_name && (dlna_friendly_name->Find("XBOX-ONE", 0, true) >= 0)) {
+		return PLT_DEVICE_XBOX_ONE;
 	} else if (agent && (agent->Find("Windows Media Player", 0, true) >= 0 || agent->Find("Windows-Media-Player", 0, true) >= 0 || agent->Find("Mozilla/4.0", 0, true) >= 0 || agent->Find("WMFSDK", 0, true) >= 0)) {
 		return PLT_DEVICE_WMP;
 	} else if (agent && (agent->Find("Sonos", 0, true) >= 0)) {
@@ -400,53 +326,13 @@ PLT_HttpHelper::GetDeviceSignature(const NPT_HttpRequest& request)
         return PLT_DEVICE_WINDOWS;
     } else if (agent && (agent->Find("Mac", 0, true) >= 0 || agent->Find("OS X", 0, true) >= 0 || agent->Find("OSX", 0, true) >= 0)) {
         return PLT_DEVICE_MAC;
+    } else if (agent && (agent->Find("VLC", 0, true) >= 0 || agent->Find("VideoLan", 0, true) >= 0)) {
+        return PLT_DEVICE_VLC;
     } else {
-        NPT_LOG_FINE_1("Unknown device signature (ua=%s)", agent?agent->GetChars():"none");
+        NPT_LOG_FINER_2("Unknown device signature (ua=%s, server=%s)", agent?agent->GetChars():"none", server?server->GetChars():"none");
     }
 
 	return PLT_DEVICE_UNKNOWN;
-}
-
-/*----------------------------------------------------------------------
-|   NPT_HttpResponse::ToLog
-+---------------------------------------------------------------------*/
-NPT_Result
-PLT_HttpHelper::ToLog(NPT_LoggerReference logger,
-                      int                 level,
-                      const char*         prefix, 
-                      NPT_HttpResponse*   response)
-{
-    if (!response) {
-        NPT_LOG_L(logger, level, "NULL HTTP Response!");
-        return NPT_FAILURE;
-    }
-
-    return ToLog(logger, level, prefix, *response);
-}
-
-/*----------------------------------------------------------------------
-|   NPT_HttpResponse::ToLog
-+---------------------------------------------------------------------*/
-NPT_Result
-PLT_HttpHelper::ToLog(NPT_LoggerReference     logger, 
-                      int                     level,
-                      const char*             prefix, 
-                      const NPT_HttpResponse& response)
-{
-    NPT_COMPILER_UNUSED(logger);
-    NPT_COMPILER_UNUSED(level);
-
-    NPT_StringOutputStreamReference stream(new NPT_StringOutputStream);
-    NPT_OutputStreamReference output = stream;
-    response.GetHeaders().GetHeaders().Apply(NPT_HttpHeaderPrinter(output));
-
-    NPT_LOG_L5(logger, level, "%s\n%s %d %s\n%s", 
-        prefix,
-        (const char*)response.GetProtocol(), 
-        response.GetStatusCode(), 
-        (const char*)response.GetReasonPhrase(),
-        (const char*)stream->GetString());
-    return NPT_SUCCESS;
 }
 
 /*----------------------------------------------------------------------

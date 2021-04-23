@@ -1,27 +1,16 @@
-#pragma once
 /*
- *      Copyright (C) 2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2013-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
-#include <string>
-#include <vector>
+
+#pragma once
 
 #include "SettingRequirement.h"
+
+#include <string>
 
 class CSettingsManager;
 class TiXmlNode;
@@ -39,8 +28,8 @@ public:
    \param id Identifier of the setting object
    \param settingsManager Reference to the settings manager
    */
-  ISetting(const std::string &id, CSettingsManager *settingsManager = NULL);
-  virtual ~ISetting() { }
+  ISetting(const std::string &id, CSettingsManager *settingsManager = nullptr);
+  virtual ~ISetting() = default;
 
   /*!
    \brief Deserializes the given XML node into the properties of the setting
@@ -73,7 +62,30 @@ public:
    \param visible Whether the setting object shall be visible or not
    */
   virtual void SetVisible(bool visible) { m_visible = visible; }
+   /*!
+   \brief Gets the localizeable label ID of the setting group.
 
+   \return Localizeable label ID of the setting group
+   */
+  int GetLabel() const { return m_label; }
+  /*!
+   \brief Sets the localizeable label ID of the setting group.
+
+   \param label Localizeable label ID of the setting group
+   */
+  void SetLabel(int label) { m_label = label; }
+  /*!
+   \brief Gets the localizeable help ID of the setting group.
+
+   \return Localizeable help ID of the setting group
+   */
+  int GetHelp() const { return m_help; }
+  /*!
+   \brief Sets the localizeable help ID of the setting group.
+
+   \param label Localizeable help ID of the setting group
+   */
+  void SetHelp(int help) { m_help = help; }
   /*!
    \brief Whether the setting object meets all necessary requirements.
 
@@ -106,7 +118,9 @@ protected:
   CSettingsManager *m_settingsManager;
 
 private:
-  bool m_visible;
-  bool m_meetsRequirements;
+  bool m_visible = true;
+  int m_label = -1;
+  int m_help = -1;
+  bool m_meetsRequirements = true;
   CSettingRequirement m_requirementCondition;
 };

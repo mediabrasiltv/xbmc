@@ -1,45 +1,35 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "FTPDirectory.h"
-#include "FTPParse.h"
-#include "URL.h"
-#include "utils/URIUtils.h"
+
 #include "CurlFile.h"
+#include "FTPParse.h"
 #include "FileItem.h"
-#include "utils/StringUtils.h"
+#include "URL.h"
 #include "utils/CharsetConverter.h"
-#include "climits"
+#include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
+
+#include <climits>
 
 using namespace XFILE;
 
-CFTPDirectory::CFTPDirectory(void){}
-CFTPDirectory::~CFTPDirectory(void){}
+CFTPDirectory::CFTPDirectory(void) = default;
+CFTPDirectory::~CFTPDirectory(void) = default;
 
-bool CFTPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+bool CFTPDirectory::GetDirectory(const CURL& url2, CFileItemList &items)
 {
   CCurlFile reader;
 
-  CURL url(strPath);
+  CURL url(url2);
 
-  CStdString path = url.GetFileName();
+  std::string path = url.GetFileName();
   if( !path.empty() && !StringUtils::EndsWith(path, "/") )
   {
     path += "/";
@@ -49,12 +39,12 @@ bool CFTPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items
   if (!reader.Open(url))
     return false;
 
-  bool serverNotUseUTF8 = url.GetProtocolOption("utf8").Equals("0");
+  bool serverNotUseUTF8 = url.GetProtocolOption("utf8") == "0";
 
   char buffer[MAX_PATH + 1024];
   while( reader.ReadString(buffer, sizeof(buffer)) )
   {
-    CStdString strBuffer = buffer;
+    std::string strBuffer = buffer;
 
     StringUtils::RemoveCRLF(strBuffer);
 
@@ -68,10 +58,10 @@ bool CFTPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items
         continue;
 
       /* buffer name */
-      CStdString name;
+      std::string name;
       name.assign(parse.getName());
 
-      if( name.Equals("..") || name.Equals(".") )
+      if( name == ".." || name == "." )
         continue;
 
       // server returned filename could in utf8 or non-utf8 encoding
@@ -91,8 +81,8 @@ bool CFTPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items
 
       CFileItemPtr pItem(new CFileItem(name));
 
-      pItem->m_bIsFolder = (bool)(parse.getFlagtrycwd() != 0);
-      CStdString filePath = path + name;
+      pItem->m_bIsFolder = parse.getFlagtrycwd() != 0;
+      std::string filePath = path + name;
       if (pItem->m_bIsFolder)
         URIUtils::AddSlashAtEnd(filePath);
 
@@ -110,14 +100,14 @@ bool CFTPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items
   return true;
 }
 
-bool CFTPDirectory::Exists(const char* strPath)
+bool CFTPDirectory::Exists(const CURL& url)
 {
   // make sure ftp dir ends with slash,
   // curl need to known it's a dir to check ftp directory existence.
-  CStdString file = strPath;
+  std::string file = url.Get();
   URIUtils::AddSlashAtEnd(file);
 
   CCurlFile ftp;
-  CURL url(file);
-  return ftp.Exists(url);
+  CURL url2(file);
+  return ftp.Exists(url2);
 }

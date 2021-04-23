@@ -1,27 +1,18 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #pragma once
 
-#include <vector>
 #include "InfoBool.h"
+
+#include <list>
+#include <stack>
+#include <vector>
 
 class CGUIListItem;
 
@@ -32,10 +23,11 @@ namespace INFO
 class InfoSingle : public InfoBool
 {
 public:
-  InfoSingle(const std::string &condition, int context);
-  virtual ~InfoSingle() {};
+  InfoSingle(const std::string &expression, int context, unsigned int &refreshCounter)
+    : InfoBool(expression, context, refreshCounter) {};
+  void Initialize() override;
 
-  virtual void Update(const CGUIListItem *item);
+  void Update(const CGUIListItem *item) override;
 private:
   int m_condition;             ///< actual condition this represents
 };
@@ -45,17 +37,72 @@ private:
 class InfoExpression : public InfoBool
 {
 public:
-  InfoExpression(const std::string &expression, int context);
-  virtual ~InfoExpression() {};
+  InfoExpression(const std::string &expression, int context, unsigned int &refreshCounter)
+    : InfoBool(expression, context, refreshCounter) {};
+  ~InfoExpression() override = default;
 
-  virtual void Update(const CGUIListItem *item);
+  void Initialize() override;
+
+  void Update(const CGUIListItem *item) override;
 private:
-  void Parse(const std::string &expression);
-  bool Evaluate(const CGUIListItem *item, bool &result);
-  short GetOperator(const char ch) const;
+  typedef enum
+  {
+    OPERATOR_NONE  = 0,
+    OPERATOR_LB,  // 1
+    OPERATOR_RB,  // 2
+    OPERATOR_OR,  // 3
+    OPERATOR_AND, // 4
+    OPERATOR_NOT, // 5
+  } operator_t;
 
-  std::vector<short> m_postfix;         ///< the postfix form of the expression (operators and operand indicies)
-  std::vector<InfoPtr> m_operands;      ///< the operands in the expression
+  typedef enum
+  {
+    NODE_LEAF,
+    NODE_AND,
+    NODE_OR,
+  } node_type_t;
+
+  // An abstract base class for nodes in the expression tree
+  class InfoSubexpression
+  {
+  public:
+    virtual ~InfoSubexpression(void) = default; // so we can destruct derived classes using a pointer to their base class
+    virtual bool Evaluate(const CGUIListItem *item) = 0;
+    virtual node_type_t Type() const=0;
+  };
+
+  typedef std::shared_ptr<InfoSubexpression> InfoSubexpressionPtr;
+
+  // A leaf node in the expression tree
+  class InfoLeaf : public InfoSubexpression
+  {
+  public:
+    InfoLeaf(InfoPtr info, bool invert) : m_info(info), m_invert(invert) {};
+    bool Evaluate(const CGUIListItem *item) override;
+    node_type_t Type() const override { return NODE_LEAF; };
+  private:
+    InfoPtr m_info;
+    bool m_invert;
+  };
+
+  // A branch node in the expression tree
+  class InfoAssociativeGroup : public InfoSubexpression
+  {
+  public:
+    InfoAssociativeGroup(node_type_t type, const InfoSubexpressionPtr &left, const InfoSubexpressionPtr &right);
+    void AddChild(const InfoSubexpressionPtr &child);
+    void Merge(std::shared_ptr<InfoAssociativeGroup> other);
+    bool Evaluate(const CGUIListItem *item) override;
+    node_type_t Type() const override { return m_type; };
+  private:
+    node_type_t m_type;
+    std::list<InfoSubexpressionPtr> m_children;
+  };
+
+  static operator_t GetOperator(char ch);
+  static void OperatorPop(std::stack<operator_t> &operator_stack, bool &invert, std::stack<InfoSubexpressionPtr> &nodes);
+  bool Parse(const std::string &expression);
+  InfoSubexpressionPtr m_expression_tree;
 };
 
 };

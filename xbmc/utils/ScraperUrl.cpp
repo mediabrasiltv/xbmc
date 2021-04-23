@@ -1,43 +1,33 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "XMLUtils.h"
 #include "ScraperUrl.h"
-#include "settings/AdvancedSettings.h"
-#include "HTMLUtil.h"
+
 #include "CharsetConverter.h"
-#include "utils/CharsetDetection.h"
-#include "utils/StringUtils.h"
+#include "ServiceBroker.h"
+#include "URIUtils.h"
 #include "URL.h"
+#include "XMLUtils.h"
 #include "filesystem/CurlFile.h"
 #include "filesystem/ZipFile.h"
-#include "URIUtils.h"
-#include "utils/XBMCTinyXML.h"
+#include "settings/AdvancedSettings.h"
+#include "settings/SettingsComponent.h"
+#include "utils/CharsetDetection.h"
 #include "utils/Mime.h"
+#include "utils/StringUtils.h"
+#include "utils/XBMCTinyXML.h"
+#include "utils/log.h"
 
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 
-using namespace std;
-
-CScraperUrl::CScraperUrl(const CStdString& strUrl)
+CScraperUrl::CScraperUrl(const std::string& strUrl)
 {
   relevance = 0;
   ParseString(strUrl);
@@ -54,9 +44,7 @@ CScraperUrl::CScraperUrl()
   relevance = 0;
 }
 
-CScraperUrl::~CScraperUrl()
-{
-}
+CScraperUrl::~CScraperUrl() = default;
 
 void CScraperUrl::Clear()
 {
@@ -68,7 +56,7 @@ void CScraperUrl::Clear()
 
 bool CScraperUrl::Parse()
 {
-  CStdString strToParse = m_xml;
+  std::string strToParse = m_xml;
   m_xml.clear();
   return ParseString(strToParse);
 }
@@ -78,15 +66,13 @@ bool CScraperUrl::ParseElement(const TiXmlElement* element)
   if (!element || !element->FirstChild() ||
       !element->FirstChild()->Value()) return false;
 
-  stringstream stream;
+  std::stringstream stream;
   stream << *element;
   m_xml += stream.str();
 
   SUrlEntry url;
   url.m_url = element->FirstChild()->Value();
-  const char* pSpoof = element->Attribute("spoof");
-  if (pSpoof)
-    url.m_spoof = pSpoof;
+  url.m_spoof = XMLUtils::GetAttribute(element, "spoof");
   const char* szPost=element->Attribute("post");
   if (szPost && stricmp(szPost,"yes") == 0)
     url.m_post = true;
@@ -97,9 +83,7 @@ bool CScraperUrl::ParseElement(const TiXmlElement* element)
     url.m_isgz = true;
   else
     url.m_isgz = false;
-  const char* pCache = element->Attribute("cache");
-  if (pCache)
-    url.m_cache = pCache;
+  url.m_cache = XMLUtils::GetAttribute(element, "cache");
 
   const char* szType = element->Attribute("type");
   url.m_type = URL_TYPE_GENERAL;
@@ -111,16 +95,14 @@ bool CScraperUrl::ParseElement(const TiXmlElement* element)
     if (szSeason)
       url.m_season = atoi(szSeason);
   }
-  const char *aspect = element->Attribute("aspect");
-  if (aspect)
-    url.m_aspect = aspect;
+  url.m_aspect = XMLUtils::GetAttribute(element, "aspect");
 
   m_url.push_back(url);
 
   return true;
 }
 
-bool CScraperUrl::ParseString(CStdString strUrl)
+bool CScraperUrl::ParseString(std::string strUrl)
 {
   if (strUrl.empty())
     return false;
@@ -156,9 +138,9 @@ bool CScraperUrl::ParseString(CStdString strUrl)
 
 const CScraperUrl::SUrlEntry CScraperUrl::GetFirstThumb(const std::string &type) const
 {
-  for (vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
+  for (std::vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
   {
-    if (iter->m_type == URL_TYPE_GENERAL && (type.empty() || type == "thumb" || iter->m_aspect == type))
+    if (iter->m_type == URL_TYPE_GENERAL && (type.empty() || iter->m_aspect == type))
       return *iter;
   }
 
@@ -172,7 +154,7 @@ const CScraperUrl::SUrlEntry CScraperUrl::GetFirstThumb(const std::string &type)
 
 const CScraperUrl::SUrlEntry CScraperUrl::GetSeasonThumb(int season, const std::string &type) const
 {
-  for (vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
+  for (std::vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
   {
     if (iter->m_type == URL_TYPE_SEASON && iter->m_season == season &&
        (type.empty() || type == "thumb" || iter->m_aspect == type))
@@ -190,7 +172,7 @@ const CScraperUrl::SUrlEntry CScraperUrl::GetSeasonThumb(int season, const std::
 unsigned int CScraperUrl::GetMaxSeasonThumb() const
 {
   unsigned int maxSeason = 0;
-  for (vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
+  for (std::vector<SUrlEntry>::const_iterator iter=m_url.begin();iter != m_url.end();++iter)
   {
     if (iter->m_type == URL_TYPE_SEASON && iter->m_season > 0 && (unsigned int)iter->m_season > maxSeason)
       maxSeason = iter->m_season;
@@ -198,24 +180,21 @@ unsigned int CScraperUrl::GetMaxSeasonThumb() const
   return maxSeason;
 }
 
-bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCurlFile& http, const CStdString& cacheContext)
+bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCurlFile& http, const std::string& cacheContext)
 {
   CURL url(scrURL.m_url);
   http.SetReferer(scrURL.m_spoof);
-  CStdString strCachePath;
-
-  if (scrURL.m_isgz)
-    http.SetContentEncoding("gzip");
+  std::string strCachePath;
 
   if (!scrURL.m_cache.empty())
   {
-    strCachePath = URIUtils::AddFileToFolder(g_advancedSettings.m_cachePath,
-                              "scrapers/" + cacheContext + "/" + scrURL.m_cache);
+    strCachePath = URIUtils::AddFileToFolder(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cachePath,
+                              "scrapers", cacheContext, scrURL.m_cache);
     if (XFILE::CFile::Exists(strCachePath))
     {
       XFILE::CFile file;
       XFILE::auto_buffer buffer;
-      if (file.LoadFile(strCachePath, buffer))
+      if (file.LoadFile(strCachePath, buffer) > 0)
       {
         strHTML.assign(buffer.get(), buffer.length());
         return true;
@@ -223,11 +202,11 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
     }
   }
 
-  CStdString strHTML1(strHTML);
+  std::string strHTML1(strHTML);
 
   if (scrURL.m_post)
   {
-    CStdString strOptions = url.GetOptions();
+    std::string strOptions = url.GetOptions();
     strOptions = strOptions.substr(1);
     url.SetOptions("");
 
@@ -240,7 +219,7 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
 
   strHTML = strHTML1;
 
-  std::string mimeType(http.GetMimeType());
+  std::string mimeType(http.GetProperty(XFILE::FILE_PROPERTY_MIME_TYPE));
   CMime::EFileType ftype = CMime::GetFileTypeFromMime(mimeType);
   if (ftype == CMime::FileTypeUnknown)
     ftype = CMime::GetFileTypeFromContent(strHTML);
@@ -259,7 +238,7 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
       CLog::Log(LOGWARNING, "%s: \"%s\" looks like archive, but cannot be unpacked", __FUNCTION__, scrURL.m_url.c_str());
   }
 
-  std::string reportedCharset(http.GetServerReportedCharset());
+  std::string reportedCharset(http.GetProperty(XFILE::FILE_PROPERTY_CONTENT_CHARSET));
   if (ftype == CMime::FileTypeHtml)
   {
     std::string realHtmlCharset, converted;
@@ -274,7 +253,7 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
   {
     CXBMCTinyXML xmlDoc;
     xmlDoc.Parse(strHTML, reportedCharset);
-    
+
     std::string realXmlCharset(xmlDoc.GetUsedCharset());
     if (!realXmlCharset.empty())
     {
@@ -284,7 +263,7 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
       strHTML = converted;
     }
   }
-  else if (ftype == CMime::FileTypePlainText || StringUtils::CompareNoCase(mimeType.substr(0, 5), "text/") == 0)
+  else if (ftype == CMime::FileTypePlainText || StringUtils::EqualsNoCase(mimeType.substr(0, 5), "text/"))
   {
     std::string realTextCharset, converted;
     CCharsetDetection::ConvertPlainTextToUtf8(strHTML, converted, reportedCharset, realTextCharset);
@@ -309,19 +288,18 @@ bool CScraperUrl::Get(const SUrlEntry& scrURL, std::string& strHTML, XFILE::CCur
 
   if (!scrURL.m_cache.empty())
   {
-    CStdString strCachePath = URIUtils::AddFileToFolder(g_advancedSettings.m_cachePath,
-                              "scrapers/" + cacheContext + "/" + scrURL.m_cache);
+    std::string strCachePath = URIUtils::AddFileToFolder(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_cachePath,
+                              "scrapers", cacheContext, scrURL.m_cache);
     XFILE::CFile file;
-    if (file.OpenForWrite(strCachePath,true))
-      file.Write(strHTML.data(),strHTML.size());
-    file.Close();
+    if (!file.OpenForWrite(strCachePath, true) || file.Write(strHTML.data(), strHTML.size()) != static_cast<ssize_t>(strHTML.size()))
+      return false;
   }
   return true;
 }
 
 // XML format is of strUrls is:
 // <TAG><url>...</url>...</TAG> (parsed by ParseElement) or <url>...</url> (ditto)
-bool CScraperUrl::ParseEpisodeGuide(CStdString strUrls)
+bool CScraperUrl::ParseEpisodeGuide(std::string strUrls)
 {
   if (strUrls.empty())
     return false;
@@ -348,24 +326,64 @@ bool CScraperUrl::ParseEpisodeGuide(CStdString strUrls)
   return true;
 }
 
-CStdString CScraperUrl::GetThumbURL(const CScraperUrl::SUrlEntry &entry)
+void CScraperUrl::AddElement(std::string url, std::string aspect, std::string preview, std::string referrer, std::string cache, bool post, bool isgz, int season)
+{
+  TiXmlElement thumb("thumb");
+  thumb.SetAttribute("spoof", referrer);
+  thumb.SetAttribute("cache", cache);
+  if (post)
+    thumb.SetAttribute("post", "yes");
+  if (isgz)
+    thumb.SetAttribute("gzip", "yes");
+  if (season >= 0)
+  {
+    thumb.SetAttribute("season", StringUtils::Format("%i", season));
+    thumb.SetAttribute("type", "season");
+  }
+  thumb.SetAttribute("aspect", aspect);
+  thumb.SetAttribute("preview", preview);
+  TiXmlText text(url);
+  thumb.InsertEndChild(text);
+  m_xml << thumb;
+  SUrlEntry nUrl;
+  nUrl.m_url = url;
+  nUrl.m_spoof = referrer;
+  nUrl.m_post = post;
+  nUrl.m_isgz = isgz;
+  nUrl.m_cache = cache;
+  if (season >= 0)
+  {
+    nUrl.m_type = URL_TYPE_SEASON;
+    nUrl.m_season = season;
+  }
+  else
+    nUrl.m_type = URL_TYPE_GENERAL;
+
+  nUrl.m_aspect = aspect;
+
+  m_url.push_back(nUrl);
+}
+
+std::string CScraperUrl::GetThumbURL(const CScraperUrl::SUrlEntry &entry)
 {
   if (entry.m_spoof.empty())
     return entry.m_url;
-  
-  return entry.m_url + "|Referer=" + CStdString(CURL::Encode(entry.m_spoof));
+
+  return entry.m_url + "|Referer=" + CURL::Encode(entry.m_spoof);
 }
 
-void CScraperUrl::GetThumbURLs(std::vector<CStdString> &thumbs, const std::string &type, int season) const
+void CScraperUrl::GetThumbURLs(std::vector<std::string> &thumbs, const std::string &type, int season, bool unique) const
 {
-  for (vector<SUrlEntry>::const_iterator iter = m_url.begin(); iter != m_url.end(); ++iter)
+  for (std::vector<SUrlEntry>::const_iterator iter = m_url.begin(); iter != m_url.end(); ++iter)
   {
-    if (iter->m_aspect == type || type.empty() || type == "thumb" || iter->m_aspect.empty())
+    if (iter->m_aspect == type || type.empty() || iter->m_aspect.empty())
     {
       if ((iter->m_type == CScraperUrl::URL_TYPE_GENERAL && season == -1)
        || (iter->m_type == CScraperUrl::URL_TYPE_SEASON && iter->m_season == season))
       {
-        thumbs.push_back(GetThumbURL(*iter));
+        std::string url = GetThumbURL(*iter);
+        if (!unique || std::find(thumbs.begin(), thumbs.end(), url) == thumbs.end())
+          thumbs.push_back(url);
       }
     }
   }

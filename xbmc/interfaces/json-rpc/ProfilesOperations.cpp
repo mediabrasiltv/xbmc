@@ -1,38 +1,35 @@
 /*
- *      Copyright (C) 2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2013-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "ProfilesOperations.h"
-#include "ApplicationMessenger.h"
+
+#include "GUIPassword.h"
+#include "ServiceBroker.h"
 #include "guilib/LocalizeStrings.h"
-#include "profiles/ProfilesManager.h"
-#include "utils/md5.h"
+#include "messaging/ApplicationMessenger.h"
+#include "profiles/ProfileManager.h"
+#include "settings/SettingsComponent.h"
+#include "utils/Digest.h"
+#include "utils/Variant.h"
 
 using namespace JSONRPC;
+using namespace KODI::MESSAGING;
+using KODI::UTILITY::CDigest;
 
-JSONRPC_STATUS CProfilesOperations::GetProfiles(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
+JSONRPC_STATUS CProfilesOperations::GetProfiles(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
 {
+  const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
+
   CFileItemList listItems;
 
-  for (unsigned int i = 0; i < CProfilesManager::Get().GetNumberOfProfiles(); ++i)
+  for (unsigned int i = 0; i < profileManager->GetNumberOfProfiles(); ++i)
   {
-    const CProfile *profile = CProfilesManager::Get().GetProfile(i);
+    const CProfile *profile = profileManager->GetProfile(i);
     CFileItemPtr item(new CFileItem(profile->getName()));
     item->SetArt("thumb", profile->getThumb());
     listItems.Add(item);
@@ -47,12 +44,12 @@ JSONRPC_STATUS CProfilesOperations::GetProfiles(const CStdString &method, ITrans
     {
       for (CVariant::iterator_array profileiter = result["profiles"].begin_array(); profileiter != result["profiles"].end_array(); ++profileiter)
       {
-        CStdString profilename = (*profileiter)["label"].asString();
-        int index = CProfilesManager::Get().GetProfileIndex(profilename);
-        const CProfile *profile = CProfilesManager::Get().GetProfile(index);
+        std::string profilename = (*profileiter)["label"].asString();
+        int index = profileManager->GetProfileIndex(profilename);
+        const CProfile *profile = profileManager->GetProfile(index);
         LockType locktype = LOCK_MODE_UNKNOWN;
         if (index == 0)
-          locktype = CProfilesManager::Get().GetMasterProfile().getLockMode();
+          locktype = profileManager->GetMasterProfile().getLockMode();
         else
           locktype = profile->getLockMode();
         (*profileiter)["lockmode"] = locktype;
@@ -63,9 +60,11 @@ JSONRPC_STATUS CProfilesOperations::GetProfiles(const CStdString &method, ITrans
   return OK;
 }
 
-JSONRPC_STATUS CProfilesOperations::GetCurrentProfile(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
+JSONRPC_STATUS CProfilesOperations::GetCurrentProfile(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
 {
-  const CProfile& currentProfile = CProfilesManager::Get().GetCurrentProfile();
+  const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
+
+  const CProfile& currentProfile = profileManager->GetCurrentProfile();
   CVariant profileVariant = CVariant(CVariant::VariantTypeObject);
   profileVariant["label"] = currentProfile.getName();
   for (CVariant::const_iterator_array propertyiter = parameterObject["properties"].begin_array(); propertyiter != parameterObject["properties"].end_array(); ++propertyiter)
@@ -84,58 +83,53 @@ JSONRPC_STATUS CProfilesOperations::GetCurrentProfile(const CStdString &method, 
   return OK;
 }
 
-JSONRPC_STATUS CProfilesOperations::LoadProfile(const CStdString &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
+JSONRPC_STATUS CProfilesOperations::LoadProfile(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant &parameterObject, CVariant &result)
 {
-  CStdString profilename = parameterObject["profile"].asString();
-  int index = CProfilesManager::Get().GetProfileIndex(profilename);
-  
+  const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
+
+  std::string profilename = parameterObject["profile"].asString();
+  int index = profileManager->GetProfileIndex(profilename);
+
   if (index < 0)
     return InvalidParams;
 
-	// Init prompt
-	bool bPrompt = false;
-	bPrompt = parameterObject["prompt"].asBoolean();
-    
-	bool bCanceled(false);
-  bool bLoadProfile(false);
+  // get the profile
+  const CProfile *profile = profileManager->GetProfile(index);
+  if (profile == NULL)
+    return InvalidParams;
 
-  if (CProfilesManager::Get().GetMasterProfile().getLockMode() == LOCK_MODE_EVERYONE ||            // Password not needed
-      (bPrompt && g_passwordManager.IsProfileLockUnlocked(index, bCanceled, bPrompt)))  // Password needed and user asked to enter it
+  bool bPrompt = parameterObject["prompt"].asBoolean();
+  bool bCanceled = false;
+  bool bLoadProfile = false;
+
+  // if the profile does not require a password or
+  // the user is prompted and provides the correct password
+  // we can load the requested profile
+  if (profile->getLockMode() == LOCK_MODE_EVERYONE ||
+     (bPrompt && g_passwordManager.IsProfileLockUnlocked(index, bCanceled, bPrompt)))
     bLoadProfile = true;
-	else if (!bCanceled && parameterObject.isMember("password"))  // Password needed and user provided it
-	{
+  else if (!bCanceled)  // Password needed and user provided it
+  {
     const CVariant &passwordObject = parameterObject["password"];
-	  CStdString strToVerify;  // Holds user saved password hash
-		if (index == 0)
-		  strToVerify = CProfilesManager::Get().GetMasterProfile().getLockCode();
-		else
-		{
-	    CProfile *profile = CProfilesManager::Get().GetProfile(index);
-		  strToVerify = profile->getLockCode();
-		}
+    std::string strToVerify = profile->getLockCode();
+    std::string password = passwordObject["value"].asString();
 
-		CStdString password = passwordObject["value"].asString();
-		
-		// Create password hash from the provided password if md5 is not used
-    CStdString md5pword2;
-    CStdString encryption = passwordObject["encryption"].asString();
-    if (encryption.Equals("none"))
-		{
-			XBMC::XBMC_MD5 md5state;
-			md5state.append(password);
-			md5state.getDigest(md5pword2);
-		}
-		else if (encryption.Equals("md5"))
-			md5pword2 = password;
+    // Create password hash from the provided password if md5 is not used
+    std::string md5pword2;
+    std::string encryption = passwordObject["encryption"].asString();
+    if (encryption == "none")
+      md5pword2 = CDigest::Calculate(CDigest::Type::MD5, password);
+    else if (encryption == "md5")
+      md5pword2 = password;
 
-		// Verify profided password
-    if (strToVerify.Equals(md5pword2))
-		  bLoadProfile = true;
-	}
+    // Verify provided password
+    if (StringUtils::EqualsNoCase(strToVerify, md5pword2))
+      bLoadProfile = true;
+  }
 
   if (bLoadProfile)
   {
-    CApplicationMessenger::Get().LoadProfile(index);
+    CApplicationMessenger::GetInstance().PostMsg(TMSG_LOADPROFILE, index);
     return ACK;
   }
   return InvalidParams;

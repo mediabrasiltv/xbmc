@@ -1,28 +1,19 @@
-#pragma once
-
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
+#pragma once
+
+#include "guilib/TextureManager.h"
 #include "threads/CriticalSection.h"
 #include "utils/Job.h"
-#include "guilib/TextureManager.h"
+
+#include <utility>
+#include <vector>
 
 /*!
  \ingroup textures,jobs
@@ -35,16 +26,16 @@
 class CImageLoader : public CJob
 {
 public:
-  CImageLoader(const CStdString &path, const bool useCache);
-  virtual ~CImageLoader();
+  CImageLoader(const std::string &path, const bool useCache);
+  ~CImageLoader() override;
 
   /*!
    \brief Work function that loads in a particular image.
    */
-  virtual bool DoWork();
+  bool DoWork() override;
 
   bool          m_use_cache; ///< Whether or not to use any caching with this image
-  CStdString    m_path; ///< path of image to load
+  std::string    m_path; ///< path of image to load
   CBaseTexture *m_texture; ///< Texture object to load the image into \sa CBaseTexture.
 };
 
@@ -61,7 +52,7 @@ class CGUILargeTextureManager : public IJobCallback
 {
 public:
   CGUILargeTextureManager();
-  virtual ~CGUILargeTextureManager();
+  ~CGUILargeTextureManager() override;
 
   /*!
    \brief Callback from CImageLoader on completion of a loaded image
@@ -70,7 +61,7 @@ public:
 
    \sa CImageLoader, IJobCallback
    */
-  virtual void OnJobComplete(unsigned int jobID, bool success, CJob *job);
+  void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
 
   /*!
    \brief Request a texture to be loaded in the background.
@@ -86,7 +77,7 @@ public:
    \return true if the image exists, else false.
    \sa CGUITextureArray and CGUITexture
    */
-  bool GetImage(const CStdString &path, CTextureArray &texture, bool firstRequest, bool useCache = true);
+  bool GetImage(const std::string &path, CTextureArray &texture, bool firstRequest, bool useCache = true);
 
   /*!
    \brief Request a texture to be unloaded.
@@ -99,7 +90,7 @@ public:
    \param immediately if set true the image is immediately unloaded once its reference count reaches zero
                       rather than being unloaded after a delay.
    */
-  void ReleaseImage(const CStdString &path, bool immediately = false);
+  void ReleaseImage(const std::string &path, bool immediately = false);
 
   /*!
    \brief Cleanup images that are no longer in use.
@@ -116,7 +107,7 @@ private:
   class CLargeTexture
   {
   public:
-    CLargeTexture(const CStdString &path);
+    explicit CLargeTexture(const std::string &path);
     virtual ~CLargeTexture();
 
     void AddRef();
@@ -124,19 +115,19 @@ private:
     bool DeleteIfRequired(bool deleteImmediately = false);
     void SetTexture(CBaseTexture* texture);
 
-    const CStdString &GetPath() const { return m_path; };
+    const std::string &GetPath() const { return m_path; };
     const CTextureArray &GetTexture() const { return m_texture; };
 
   private:
     static const unsigned int TIME_TO_DELETE = 2000;
 
     unsigned int m_refCount;
-    CStdString m_path;
+    std::string m_path;
     CTextureArray m_texture;
     unsigned int m_timeToDelete;
   };
 
-  void QueueImage(const CStdString &path, bool useCache = true);
+  void QueueImage(const std::string &path, bool useCache = true);
 
   std::vector< std::pair<unsigned int, CLargeTexture *> > m_queued;
   std::vector<CLargeTexture *> m_allocated;
@@ -145,7 +136,4 @@ private:
 
   CCriticalSection m_listSection;
 };
-
-extern CGUILargeTextureManager g_largeTextureManager;
-
 

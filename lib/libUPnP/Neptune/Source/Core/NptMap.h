@@ -52,7 +52,7 @@ public:
     public:
         // constructor
         Entry(const K& key, const V& value) : m_Key(key), m_Value(value) {}
-        Entry(const K& key) : m_Key(key) {}
+        Entry(const K& key) : m_Key(key), m_Value() {}
         
         // accessors
         const K& GetKey()   const { return m_Key;   }
@@ -326,7 +326,7 @@ public:
     public:
         // constructor
         Entry(NPT_UInt32 hash_value, const K& key, const V& value) : m_HashValue(hash_value), m_Key(key), m_Value(value) {}
-        Entry(NPT_UInt32 hash_value, const K& key)                 : m_HashValue(hash_value), m_Key(key) {}
+        Entry(NPT_UInt32 hash_value, const K& key)                 : m_HashValue(hash_value), m_Key(key), m_Value()      {}
         
         // accessors
         const K&   GetKey()       const { return m_Key;   }
@@ -422,7 +422,7 @@ public:
     template <typename X> 
     NPT_Result Apply(const X& function) const
     {                          
-        for (unsigned int i=0; i<(m_BucketCountLog<<1); i++) {
+        for (int i=0; i<(1<<m_BucketCountLog); i++) {
             if (m_Buckets[i]) {
                 function(m_Buckets[i]);
             }

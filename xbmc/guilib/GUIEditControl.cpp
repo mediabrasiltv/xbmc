@@ -1,43 +1,34 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "GUIEditControl.h"
-#include "GUIWindowManager.h"
-#include "utils/CharsetConverter.h"
+
 #include "GUIKeyboardFactory.h"
-#include "dialogs/GUIDialogNumeric.h"
-#include "input/XBMC_vkeys.h"
-#include "Key.h"
+#include "GUIUserMessages.h"
+#include "GUIWindowManager.h"
 #include "LocalizeStrings.h"
+#include "ServiceBroker.h"
 #include "XBDateTime.h"
-#include "windowing/WindowingFactory.h"
-#include "utils/md5.h"
+#include "dialogs/GUIDialogNumeric.h"
+#include "input/Key.h"
+#include "input/XBMC_vkeys.h"
+#include "utils/CharsetConverter.h"
+#include "utils/Color.h"
+#include "utils/Digest.h"
+#include "utils/Variant.h"
+#include "windowing/WinSystem.h"
 
-#if defined(TARGET_DARWIN)
-#include "osx/CocoaInterface.h"
-#endif
+using namespace KODI::GUILIB;
 
-const char* CGUIEditControl::smsLetters[10] = { " !@#$%^&*()[]{}<>/\\|0", ".,;:\'\"-+_=?`~1", "abc2", "def3", "ghi4", "jkl5", "mno6", "pqrs7", "tuv8", "wxyz9" };
+using KODI::UTILITY::CDigest;
+
+const char* CGUIEditControl::smsLetters[10] = { " !@#$%^&*()[]{}<>/\\|0", ".,;:\'\"-+_=?`~1", "abc2ABC", "def3DEF", "ghi4GHI", "jkl5JKL", "mno6MNO", "pqrs7PQRS", "tuv8TUV", "wxyz9WXYZ" };
 const unsigned int CGUIEditControl::smsDelay = 1000;
-
-using namespace std;
 
 #ifdef TARGET_WINDOWS
 extern HWND g_hWnd;
@@ -59,7 +50,7 @@ void CGUIEditControl::DefaultConstructor()
   m_textWidth = GetWidth();
   m_cursorPos = 0;
   m_cursorBlink = 0;
-  m_inputHeading = 0;
+  m_inputHeading = g_localizeStrings.Get(16028);
   m_inputType = INPUT_TYPE_TEXT;
   m_smsLastKey = 0;
   m_smsKeyIndex = 0;
@@ -69,6 +60,8 @@ void CGUIEditControl::DefaultConstructor()
   m_invalidInput = false;
   m_inputValidator = NULL;
   m_inputValidatorData = NULL;
+  m_editLength = 0;
+  m_editOffset = 0;
 }
 
 CGUIEditControl::CGUIEditControl(const CGUIButtonControl &button)
@@ -77,26 +70,19 @@ CGUIEditControl::CGUIEditControl(const CGUIButtonControl &button)
   DefaultConstructor();
 }
 
-CGUIEditControl::~CGUIEditControl(void)
-{
-}
+CGUIEditControl::~CGUIEditControl(void) = default;
 
 bool CGUIEditControl::OnMessage(CGUIMessage &message)
 {
   if (message.GetMessage() == GUI_MSG_SET_TYPE)
   {
-    SetInputType((INPUT_TYPE)message.GetParam1(), (int)message.GetParam2());
+    SetInputType((INPUT_TYPE)message.GetParam1(), message.GetParam2());
     return true;
   }
   else if (message.GetMessage() == GUI_MSG_ITEM_SELECTED)
   {
     message.SetLabel(GetLabel2());
     return true;
-  }
-  else if (message.GetMessage() == GUI_MSG_SETFOCUS ||
-           message.GetMessage() == GUI_MSG_LOSTFOCUS)
-  {
-    m_smsTimer.Stop();
   }
   else if (message.GetMessage() == GUI_MSG_SET_TEXT &&
           ((message.GetControlId() <= 0 && HasFocus()) || (message.GetControlId() == GetID())))
@@ -124,7 +110,8 @@ bool CGUIEditControl::OnAction(const CAction &action)
       }
       return true;
     }
-    else if (action.GetID() == ACTION_MOVE_LEFT)
+    else if (action.GetID() == ACTION_MOVE_LEFT ||
+             action.GetID() == ACTION_CURSOR_LEFT)
     {
       if (m_cursorPos > 0)
       {
@@ -133,9 +120,10 @@ bool CGUIEditControl::OnAction(const CAction &action)
         return true;
       }
     }
-    else if (action.GetID() == ACTION_MOVE_RIGHT)
+    else if (action.GetID() == ACTION_MOVE_RIGHT ||
+             action.GetID() == ACTION_CURSOR_RIGHT)
     {
-      if ((unsigned int) m_cursorPos < m_text2.size())
+      if (m_cursorPos < m_text2.size())
       {
         m_cursorPos++;
         UpdateText(false);
@@ -148,10 +136,10 @@ bool CGUIEditControl::OnAction(const CAction &action)
       OnPasteClipboard();
       return true;
     }
-    else if (action.GetID() >= KEY_VKEY && action.GetID() < KEY_ASCII)
+    else if (action.GetID() >= KEY_VKEY && action.GetID() < KEY_ASCII && m_edit.empty())
     {
       // input from the keyboard (vkey, not ascii)
-      BYTE b = action.GetID() & 0xFF;
+      unsigned char b = action.GetID() & 0xFF;
       if (b == XBMCVK_HOME)
       {
         m_cursorPos = 0;
@@ -196,13 +184,29 @@ bool CGUIEditControl::OnAction(const CAction &action)
         }
         return true;
       }
+      else if (b == XBMCVK_RETURN || b == XBMCVK_NUMPADENTER)
+      {
+        // enter - send click message, but otherwise ignore
+        SEND_CLICK_MESSAGE(GetID(), GetParentID(), 1);
+        return true;
+      }
+      else if (b == XBMCVK_ESCAPE)
+      { // escape - fallthrough to default action
+        return CGUIButtonControl::OnAction(action);
+      }
     }
     else if (action.GetID() >= KEY_ASCII)
     {
       // input from the keyboard
-      switch (action.GetUnicode())
+      int ch = action.GetUnicode();
+      // ignore non-printing characters
+      if ( !((0 <= ch && ch < 0x8) || (0xE <= ch && ch < 0x1B) || (0x1C <= ch && ch < 0x20)) )
       {
-      case '\t':
+      switch (ch)
+      {
+      case 9:  // tab, ignore
+      case 11: // Non-printing character, ignore
+      case 12: // Non-printing character, ignore
         break;
       case 10:
       case 13:
@@ -225,26 +229,42 @@ bool CGUIEditControl::OnAction(const CAction &action)
           }
           break;
         }
+      case 127:
+        { // delete
+          if (m_cursorPos < m_text2.length())
+          {
+            if (!ClearMD5())
+              m_text2.erase(m_cursorPos, 1);
+          }
+        break;
+        }
       default:
         {
           ClearMD5();
-          m_text2.insert(m_text2.begin() + m_cursorPos++, (WCHAR)action.GetUnicode());
+          m_edit.clear();
+          m_text2.insert(m_text2.begin() + m_cursorPos++, action.GetUnicode());
           break;
         }
       }
       UpdateText();
       return true;
+      }
     }
     else if (action.GetID() >= REMOTE_0 && action.GetID() <= REMOTE_9)
     { // input from the remote
       ClearMD5();
-      if (m_inputType == INPUT_TYPE_FILTER)
-      { // filtering - use single number presses
-        m_text2.insert(m_text2.begin() + m_cursorPos++, L'0' + (action.GetID() - REMOTE_0));
-        UpdateText();
-      }
-      else
-        OnSMSCharacter(action.GetID() - REMOTE_0);
+      m_edit.clear();
+      OnSMSCharacter(action.GetID() - REMOTE_0);
+      return true;
+    }
+    else if (action.GetID() == ACTION_INPUT_TEXT)
+    {
+      m_edit.clear();
+      std::wstring str;
+      g_charsetConverter.utf8ToW(action.GetText(), str);
+      m_text2.insert(m_cursorPos, str);
+      m_cursorPos += str.size();
+      UpdateText();
       return true;
     }
   }
@@ -258,17 +278,16 @@ void CGUIEditControl::OnClick()
   if (GetParentID() == WINDOW_DIALOG_KEYBOARD)
     return;
 
-  CStdString utf8;
+  std::string utf8;
   g_charsetConverter.wToUTF8(m_text2, utf8);
   bool textChanged = false;
-  CStdString heading = g_localizeStrings.Get(m_inputHeading ? m_inputHeading : 16028);
   switch (m_inputType)
   {
     case INPUT_TYPE_READONLY:
       textChanged = false;
       break;
     case INPUT_TYPE_NUMBER:
-      textChanged = CGUIDialogNumeric::ShowAndGetNumber(utf8, heading);
+      textChanged = CGUIDialogNumeric::ShowAndGetNumber(utf8, m_inputHeading);
       break;
     case INPUT_TYPE_SECONDS:
       textChanged = CGUIDialogNumeric::ShowAndGetSeconds(utf8, g_localizeStrings.Get(21420));
@@ -279,7 +298,7 @@ void CGUIEditControl::OnClick()
       dateTime.SetFromDBTime(utf8);
       SYSTEMTIME time;
       dateTime.GetAsSystemTime(time);
-      if (CGUIDialogNumeric::ShowAndGetTime(time, heading > 0 ? heading : g_localizeStrings.Get(21420)))
+      if (CGUIDialogNumeric::ShowAndGetTime(time, !m_inputHeading.empty() ? m_inputHeading : g_localizeStrings.Get(21420)))
       {
         dateTime = CDateTime(time);
         utf8 = dateTime.GetAsLocalizedTime("", false);
@@ -295,7 +314,7 @@ void CGUIEditControl::OnClick()
         dateTime = CDateTime(2000, 1, 1, 0, 0, 0);
       SYSTEMTIME date;
       dateTime.GetAsSystemTime(date);
-      if (CGUIDialogNumeric::ShowAndGetDate(date, heading > 0 ? heading : g_localizeStrings.Get(21420)))
+      if (CGUIDialogNumeric::ShowAndGetDate(date, !m_inputHeading.empty() ? m_inputHeading : g_localizeStrings.Get(21420)))
       {
         dateTime = CDateTime(date);
         utf8 = dateTime.GetAsDBDate();
@@ -304,7 +323,7 @@ void CGUIEditControl::OnClick()
       break;
     }
     case INPUT_TYPE_IPADDRESS:
-      textChanged = CGUIDialogNumeric::ShowAndGetIPAddress(utf8, heading);
+      textChanged = CGUIDialogNumeric::ShowAndGetIPAddress(utf8, m_inputHeading);
       break;
     case INPUT_TYPE_SEARCH:
       textChanged = CGUIKeyboardFactory::ShowAndGetFilter(utf8, true);
@@ -316,16 +335,17 @@ void CGUIEditControl::OnClick()
       textChanged = CGUIDialogNumeric::ShowAndVerifyNewPassword(utf8);
       break;
     case INPUT_TYPE_PASSWORD_MD5:
-      utf8 = ""; // TODO: Ideally we'd send this to the keyboard and tell the keyboard we have this type of input
+      utf8 = ""; //! @todo Ideally we'd send this to the keyboard and tell the keyboard we have this type of input
       // fallthrough
     case INPUT_TYPE_TEXT:
     default:
-      textChanged = CGUIKeyboardFactory::ShowAndGetInput(utf8, heading, true, m_inputType == INPUT_TYPE_PASSWORD || m_inputType == INPUT_TYPE_PASSWORD_MD5);
+      textChanged = CGUIKeyboardFactory::ShowAndGetInput(utf8, m_inputHeading, true, m_inputType == INPUT_TYPE_PASSWORD || m_inputType == INPUT_TYPE_PASSWORD_MD5);
       break;
   }
   if (textChanged)
   {
     ClearMD5();
+    m_edit.clear();
     g_charsetConverter.utf8ToW(utf8, m_text2);
     m_cursorPos = m_text2.size();
     UpdateText();
@@ -347,11 +367,14 @@ void CGUIEditControl::UpdateText(bool sendUpdate)
   SetInvalid();
 }
 
-void CGUIEditControl::SetInputType(CGUIEditControl::INPUT_TYPE type, int heading)
+void CGUIEditControl::SetInputType(CGUIEditControl::INPUT_TYPE type, CVariant heading)
 {
   m_inputType = type;
-  m_inputHeading = heading;
-  // TODO: Verify the current input string?
+  if (heading.isString())
+    m_inputHeading = heading.asString();
+  else if (heading.isInteger() && heading.asInteger())
+    m_inputHeading = g_localizeStrings.Get(static_cast<uint32_t>(heading.asInteger()));
+  //! @todo Verify the current input string?
 }
 
 void CGUIEditControl::RecalcLabelPosition()
@@ -359,7 +382,7 @@ void CGUIEditControl::RecalcLabelPosition()
   // ensure that our cursor is within our width
   ValidateCursor();
 
-  CStdStringW text = GetDisplayedText();
+  std::wstring text = GetDisplayedText();
   m_textWidth = m_label.CalcTextWidth(text + L'|');
   float beforeCursorWidth = m_label.CalcTextWidth(text.substr(0, m_cursorPos));
   float afterCursorWidth = m_label.CalcTextWidth(text.substr(0, m_cursorPos) + L'|');
@@ -396,7 +419,7 @@ void CGUIEditControl::RecalcLabelPosition()
 
 void CGUIEditControl::ProcessText(unsigned int currentTime)
 {
-  if (m_smsTimer.GetElapsedMilliseconds() > smsDelay)
+  if (m_smsTimer.IsRunning() && m_smsTimer.GetElapsedMilliseconds() > smsDelay)
     UpdateText();
 
   if (m_bInvalidated)
@@ -424,7 +447,7 @@ void CGUIEditControl::ProcessText(unsigned int currentTime)
     m_clipRect.x1 += leftTextWidth + spaceWidth;
   }
 
-  if (g_graphicsContext.SetClipRegion(m_clipRect.x1, m_clipRect.y1, m_clipRect.Width(), m_clipRect.Height()))
+  if (CServiceBroker::GetWinSystem()->GetGfxContext().SetClipRegion(m_clipRect.x1, m_clipRect.y1, m_clipRect.Width(), m_clipRect.Height()))
   {
     uint32_t align = m_label.GetLabelInfo().align & XBFONT_CENTER_Y; // start aligned left
     if (m_label2.GetTextWidth() < m_clipRect.Width())
@@ -438,28 +461,28 @@ void CGUIEditControl::ProcessText(unsigned int currentTime)
         align |= (m_label2.GetLabelInfo().align & 3);
       }
     }
-    CStdStringW text = GetDisplayedText();
-    // add the cursor if we're focused
-    if (HasFocus() && m_inputType != INPUT_TYPE_READONLY)
-    {
-      CStdStringW col;
-      if ((m_focusCounter % 64) > 32)
-        col = L"|";
-      else
-        col = L"[COLOR 00FFFFFF]|[/COLOR]";
-      text.insert(m_cursorPos, col);
-    }
-
     changed |= m_label2.SetMaxRect(m_clipRect.x1 + m_textOffset, m_posY, m_clipRect.Width() - m_textOffset, m_height);
-    if (text.empty())
-      changed |= m_label2.SetText(m_hintInfo.GetLabel(GetParentID()));
+
+    std::wstring text = GetDisplayedText();
+    std::string hint = m_hintInfo.GetLabel(GetParentID());
+
+    if (!HasFocus() && text.empty() && !hint.empty())
+    {
+      changed |= m_label2.SetText(hint);
+    }
+    else if ((HasFocus() || GetParentID() == WINDOW_DIALOG_KEYBOARD) &&
+             m_inputType != INPUT_TYPE_READONLY)
+    {
+      changed |= SetStyledText(text);
+    }
     else
       changed |= m_label2.SetTextW(text);
+
     changed |= m_label2.SetAlign(align);
     changed |= m_label2.SetColor(GetTextColor());
     changed |= m_label2.SetOverflow(CGUILabel::OVER_FLOW_CLIP);
     changed |= m_label2.Process(currentTime);
-    g_graphicsContext.RestoreClipRegion();
+    CServiceBroker::GetWinSystem()->GetGfxContext().RestoreClipRegion();
   }
   if (changed)
     MarkDirtyRegion();
@@ -469,10 +492,10 @@ void CGUIEditControl::RenderText()
 {
   m_label.Render();
 
-  if (g_graphicsContext.SetClipRegion(m_clipRect.x1, m_clipRect.y1, m_clipRect.Width(), m_clipRect.Height()))
+  if (CServiceBroker::GetWinSystem()->GetGfxContext().SetClipRegion(m_clipRect.x1, m_clipRect.y1, m_clipRect.Width(), m_clipRect.Height()))
   {
     m_label2.Render();
-    g_graphicsContext.RestoreClipRegion();
+    CServiceBroker::GetWinSystem()->GetGfxContext().RestoreClipRegion();
   }
 }
 
@@ -485,20 +508,67 @@ CGUILabel::COLOR CGUIEditControl::GetTextColor() const
   return color;
 }
 
-void CGUIEditControl::SetHint(const CGUIInfoLabel& hint)
+void CGUIEditControl::SetHint(const GUIINFO::CGUIInfoLabel& hint)
 {
   m_hintInfo = hint;
 }
 
-CStdStringW CGUIEditControl::GetDisplayedText() const
+std::wstring CGUIEditControl::GetDisplayedText() const
 {
+  std::wstring text(m_text2);
   if (m_inputType == INPUT_TYPE_PASSWORD || m_inputType == INPUT_TYPE_PASSWORD_MD5 || m_inputType == INPUT_TYPE_PASSWORD_NUMBER_VERIFY_NEW)
   {
-    CStdStringW text;
-    text.append(m_text2.size(), L'*');
-    return text;
+    text.clear();
+    if (m_smsTimer.IsRunning())
+    { // using the remove to input, so display the last key input
+      text.append(m_cursorPos - 1, L'*');
+      text.append(1, m_text2[m_cursorPos - 1]);
+      text.append(m_text2.size() - m_cursorPos, L'*');
+    }
+    else
+      text.append(m_text2.size(), L'*');
   }
-  return m_text2;
+  else if (!m_edit.empty())
+    text.insert(m_editOffset, m_edit);
+  return text;
+}
+
+bool CGUIEditControl::SetStyledText(const std::wstring &text)
+{
+  vecText styled;
+  styled.reserve(text.size() + 1);
+
+  std::vector<UTILS::Color> colors;
+  colors.push_back(m_label.GetLabelInfo().textColor);
+  colors.push_back(m_label.GetLabelInfo().disabledColor);
+  UTILS::Color select = m_label.GetLabelInfo().selectedColor;
+  if (!select)
+    select = 0xFFFF0000;
+  colors.push_back(select);
+  colors.push_back(0x00FFFFFF);
+
+  unsigned int startHighlight = m_cursorPos;
+  unsigned int endHighlight   = m_cursorPos + m_edit.size();
+  unsigned int startSelection = m_cursorPos + m_editOffset;
+  unsigned int endSelection   = m_cursorPos + m_editOffset + m_editLength;
+
+  for (unsigned int i = 0; i < text.size(); i++)
+  {
+    unsigned int ch = text[i];
+    if (m_editLength > 0 && startSelection <= i && i < endSelection)
+      ch |= (2 << 16); // highlight the letters we're playing with
+    else if (!m_edit.empty() && (i < startHighlight || i >= endHighlight))
+      ch |= (1 << 16); // dim the bits we're not editing
+    styled.push_back(ch);
+  }
+
+  // show the cursor
+  unsigned int ch = L'|';
+  if ((++m_cursorBlink % 64) > 32)
+    ch |= (3 << 16);
+  styled.insert(styled.begin() + m_cursorPos, ch);
+
+  return m_label2.SetStyledText(styled, colors);
 }
 
 void CGUIEditControl::ValidateCursor()
@@ -515,7 +585,8 @@ void CGUIEditControl::SetLabel(const std::string &text)
 
 void CGUIEditControl::SetLabel2(const std::string &text)
 {
-  CStdStringW newText;
+  m_edit.clear();
+  std::wstring newText;
   g_charsetConverter.utf8ToW(text, newText);
   if (newText != m_text2)
   {
@@ -527,12 +598,12 @@ void CGUIEditControl::SetLabel2(const std::string &text)
   }
 }
 
-CStdString CGUIEditControl::GetLabel2() const
+std::string CGUIEditControl::GetLabel2() const
 {
-  CStdString text;
+  std::string text;
   g_charsetConverter.wToUTF8(m_text2, text);
   if (m_inputType == INPUT_TYPE_PASSWORD_MD5 && !m_isMD5)
-    return XBMC::XBMC_MD5::GetMD5(text);
+    return CDigest::Calculate(CDigest::Type::MD5, text);
   return text;
 }
 
@@ -540,7 +611,7 @@ bool CGUIEditControl::ClearMD5()
 {
   if (!(m_inputType == INPUT_TYPE_PASSWORD_MD5 || m_inputType == INPUT_TYPE_PASSWORD_NUMBER_VERIFY_NEW) || !m_isMD5)
     return false;
-  
+
   m_text2.clear();
   m_cursorPos = 0;
   if (m_inputType != INPUT_TYPE_PASSWORD_NUMBER_VERIFY_NEW)
@@ -561,7 +632,6 @@ void CGUIEditControl::SetCursorPosition(unsigned int iPosition)
 void CGUIEditControl::OnSMSCharacter(unsigned int key)
 {
   assert(key < 10);
-  bool sendUpdate = false;
   if (m_smsTimer.IsRunning())
   {
     // we're already entering an SMS character
@@ -569,7 +639,6 @@ void CGUIEditControl::OnSMSCharacter(unsigned int key)
     { // a different key was clicked than last time, or we have timed out
       m_smsLastKey = key;
       m_smsKeyIndex = 0;
-      sendUpdate = true;
     }
     else
     { // same key as last time within the appropriate time period
@@ -587,24 +656,24 @@ void CGUIEditControl::OnSMSCharacter(unsigned int key)
   m_smsKeyIndex = m_smsKeyIndex % strlen(smsLetters[key]);
 
   m_text2.insert(m_text2.begin() + m_cursorPos++, smsLetters[key][m_smsKeyIndex]);
-  UpdateText(sendUpdate);
+  UpdateText();
   m_smsTimer.StartZero();
 }
 
 void CGUIEditControl::OnPasteClipboard()
 {
-  CStdStringW unicode_text;
-  CStdStringA utf8_text;
+  std::wstring unicode_text;
+  std::string utf8_text;
 
-// Get text from the clipboard
-  utf8_text = g_Windowing.GetClipboardText();
+  // Get text from the clipboard
+  utf8_text = CServiceBroker::GetWinSystem()->GetClipboardText();
   g_charsetConverter.utf8ToW(utf8_text, unicode_text);
 
   // Insert the pasted text at the current cursor position.
   if (unicode_text.length() > 0)
   {
-    CStdStringW left_end = m_text2.substr(0, m_cursorPos);
-    CStdStringW right_end = m_text2.substr(m_cursorPos);
+    std::wstring left_end = m_text2.substr(0, m_cursorPos);
+    std::wstring right_end = m_text2.substr(m_cursorPos);
 
     m_text2 = left_end;
     m_text2.append(unicode_text);
@@ -618,19 +687,19 @@ void CGUIEditControl::SetInputValidation(StringValidation::Validator inputValida
 {
   if (m_inputValidator == inputValidator)
     return;
-  
+
   m_inputValidator = inputValidator;
   m_inputValidatorData = data;
   // the input validator has changed, so re-validate the current data
   ValidateInput();
 }
 
-bool CGUIEditControl::ValidateInput(const CStdStringW &data) const
+bool CGUIEditControl::ValidateInput(const std::wstring &data) const
 {
   if (m_inputValidator == NULL)
     return true;
 
-  return m_inputValidator(GetLabel2(), (void*)(m_inputValidatorData != NULL ? m_inputValidatorData : this));
+  return m_inputValidator(GetLabel2(), m_inputValidatorData != NULL ? m_inputValidatorData : const_cast<void*>((const void*)this));
 }
 
 void CGUIEditControl::ValidateInput()
@@ -649,4 +718,21 @@ void CGUIEditControl::ValidateInput()
 
     SetInvalid();
   }
+}
+
+void CGUIEditControl::SetFocus(bool focus)
+{
+  m_smsTimer.Stop();
+  CGUIControl::SetFocus(focus);
+  SetInvalid();
+}
+
+std::string CGUIEditControl::GetDescriptionByIndex(int index) const
+{
+  if (index == 0)
+    return GetDescription();
+  else if(index == 1)
+    return GetLabel2();
+
+  return "";
 }

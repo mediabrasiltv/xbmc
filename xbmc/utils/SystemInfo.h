@@ -1,28 +1,17 @@
-#pragma once
-
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "md5.h"
+#pragma once
+
 #include "InfoLoader.h"
-#include "settings/lib/ISubSettings.h"
+#include "settings/ISubSettings.h"
+
+#include <string>
 
 #define KB  (1024)          // 1 KiloByte (1KB)   1024 Byte (2^10 Byte)
 #define MB  (1024*KB)       // 1 MegaByte (1MB)   1024 KB (2^10 KB)
@@ -46,14 +35,14 @@ public:
     internetState = UNKNOWN;
   };
 
-  CStdString systemUptime;
-  CStdString systemTotalUptime;
+  std::string systemUptime;
+  std::string systemTotalUptime;
   INTERNET_STATE internetState;
-  CStdString videoEncoder;
-  CStdString cpuFrequency;
-  CStdString kernelVersion;
-  CStdString macAddress;
-  CStdString batteryLevel;
+  std::string videoEncoder;
+  std::string cpuFrequency;
+  std::string osVersionInfo;
+  std::string macAddress;
+  std::string batteryLevel;
 };
 
 class CSysInfoJob : public CJob
@@ -61,18 +50,16 @@ class CSysInfoJob : public CJob
 public:
   CSysInfoJob();
 
-  virtual bool DoWork();
+  bool DoWork() override;
   const CSysData &GetData() const;
 
   static CSysData::INTERNET_STATE GetInternetState();
 private:
-  bool SystemUpTime(int iInputMinutes, int &iMinutes, int &iHours, int &iDays);
-  double GetCPUFrequency();
-  CStdString GetSystemUpTime(bool bTotalUptime);
-  CStdString GetCPUFreqInfo();
-  CStdString GetMACAddress();
-  CStdString GetVideoEncoder();
-  CStdString GetBatteryLevel();
+  static bool SystemUpTime(int iInputMinutes, int &iMinutes, int &iHours, int &iDays);
+  static std::string GetSystemUpTime(bool bTotalUptime);
+  static std::string GetMACAddress();
+  static std::string GetVideoEncoder();
+  static std::string GetBatteryLevel();
 
   CSysData m_info;
 };
@@ -83,73 +70,81 @@ public:
   enum WindowsVersion
   {
     WindowsVersionUnknown = -1, // Undetected, unsupported Windows version or OS in not Windows
-    WindowsVersionVista,        // Windows Vista, Windows Server 2008
     WindowsVersionWin7,         // Windows 7, Windows Server 2008 R2
     WindowsVersionWin8,         // Windows 8, Windows Server 2012
     WindowsVersionWin8_1,       // Windows 8.1
+    WindowsVersionWin10,        // Windows 10
+    WindowsVersionWin10_FCU,    // Windows 10 Fall Creators Update
     /* Insert new Windows versions here, when they'll be known */
     WindowsVersionFuture = 100  // Future Windows version, not known to code
   };
+  enum WindowsDeviceFamily
+  {
+    Mobile = 1,
+    Desktop = 2,
+    IoT = 3,
+    Xbox = 4,
+    Surface = 5,
+    Other = 100
+  };
 
   CSysInfo(void);
-  virtual ~CSysInfo();
+  ~CSysInfo() override;
 
-  virtual bool Load(const TiXmlNode *settings);
-  virtual bool Save(TiXmlNode *settings) const;
+  bool Load(const TiXmlNode *settings) override;
+  bool Save(TiXmlNode *settings) const override;
 
   char MD5_Sign[32 + 1];
 
-  bool GetDVDInfo(CStdString& strDVDModel, CStdString& strDVDFirmware);
-  bool GetHDDInfo(CStdString& strHDDModel, CStdString& strHDDSerial,CStdString& strHDDFirmware,CStdString& strHDDpw,CStdString& strHDDLockState);
-  bool GetRefurbInfo(CStdString& rfi_FirstBootTime, CStdString& rfi_PowerCycleCount);
+  static const std::string& GetAppName(void); // the same name as CCompileInfo::GetAppName(), but const ref to std::string
 
-#if defined(TARGET_LINUX)
-  CStdString GetLinuxDistro();
-#endif
-#ifdef TARGET_POSIX
-  CStdString GetUnameVersion();
-#endif
-#if defined(TARGET_WINDOWS)
-  CStdString GetUAWindowsVersion();
-#endif
-  CStdString GetUserAgent();
+  static std::string GetKernelName(bool emptyIfUnknown = false);
+  static std::string GetKernelVersionFull(void); // full version string, including "-generic", "-RELEASE" etc.
+  static std::string GetKernelVersion(void); // only digits with dots
+  static std::string GetOsName(bool emptyIfUnknown = false);
+  static std::string GetOsVersion(void);
+  static std::string GetOsPrettyNameWithVersion(void);
+  static std::string GetUserAgent();
+  static std::string GetDeviceName();
+  static std::string GetVersion();
+  static std::string GetVersionShort();
+  static std::string GetBuildDate();
+
   bool HasInternet();
-  bool IsAppleTV2();
-  bool HasVideoToolBoxDecoder();
   bool IsAeroDisabled();
-  bool HasHW3DInterlaced();
   static bool IsWindowsVersion(WindowsVersion ver);
   static bool IsWindowsVersionAtLeast(WindowsVersion ver);
   static WindowsVersion GetWindowsVersion();
   static int GetKernelBitness(void);
   static int GetXbmcBitness(void);
-  static CStdString GetKernelVersion();
-  CStdString GetCPUModel();
-  CStdString GetCPUBogoMips();
-  CStdString GetCPUHardware();
-  CStdString GetCPURevision();
-  CStdString GetCPUSerial();
-  CStdString GetManufacturer();
-  CStdString GetProduct();
-  CStdString GetModel();
-  bool GetDiskSpace(const CStdString& drive,int& iTotal, int& iTotalFree, int& iTotalUsed, int& iPercentFree, int& iPercentUsed);
-  CStdString GetHddSpaceInfo(int& percent, int drive, bool shortText=false);
-  CStdString GetHddSpaceInfo(int drive, bool shortText=false);
+  static const std::string& GetKernelCpuFamily(void);
+  static std::string GetManufacturerName(void);
+  static std::string GetModelName(void);
+  bool GetDiskSpace(std::string drive,int& iTotal, int& iTotalFree, int& iTotalUsed, int& iPercentFree, int& iPercentUsed);
+  std::string GetHddSpaceInfo(int& percent, int drive, bool shortText=false);
+  std::string GetHddSpaceInfo(int drive, bool shortText=false);
 
   int GetTotalUptime() const { return m_iSystemTimeTotalUp; }
   void SetTotalUptime(int uptime) { m_iSystemTimeTotalUp = uptime; }
 
   static std::string GetBuildTargetPlatformName(void);
   static std::string GetBuildTargetPlatformVersion(void);
+  static std::string GetBuildTargetPlatformVersionDecoded(void);
   static std::string GetBuildTargetCpuFamily(void);
 
+  static std::string GetUsedCompilerNameAndVer(void);
+  std::string GetPrivacyPolicy();
+
+  static WindowsDeviceFamily GetWindowsDeviceFamily();
+
 protected:
-  virtual CJob *GetJob() const;
-  virtual CStdString TranslateInfo(int info) const;
-  virtual void OnJobComplete(unsigned int jobID, bool success, CJob *job);
+  CJob *GetJob() const override;
+  std::string TranslateInfo(int info) const override;
+  void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
 
 private:
   CSysData m_info;
+  std::string m_privacyPolicy;
   static WindowsVersion m_WinVer;
   int m_iSystemTimeTotalUp; // Uptime in minutes!
   void Reset();

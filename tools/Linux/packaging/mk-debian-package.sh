@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Copyright (C) 2013 Team XBMC
-# http://xbmc.org
+# http://kodi.tv
 #
 # This Program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 RELEASEV=${RELEASEV:-"auto"}
 VERSION_PREFIX=${VERSION_PREFIX:-""}
 TAG=${TAG}
+TAGREV=${TAGREV:-""}
 REPO_DIR=${WORKSPACE:-$(cd "$(dirname $0)/../../../" ; pwd)}
 [[ $(which lsb_release) ]] && DISTS=${DISTS:-$(lsb_release -cs)} || DISTS=${DISTS:-"stable"}
 ARCHS=${ARCHS:-$(dpkg --print-architecture)}
@@ -31,10 +32,11 @@ PDEBUILD_OPTS=${PDEBUILD_OPTS:-""}
 PBUILDER_BASE=${PBUILDER_BASE:-"/var/cache/pbuilder"}
 DPUT_TARGET=${DPUT_TARGET:-"local"}
 DEBIAN=${DEBIAN:-"https://github.com/xbmc/xbmc-packaging/archive/master.tar.gz"}
+BUILD_DATE=$(date '+%Y%m%d.%H%M')
 
 function usage {
-    echo "$0: this script builds a Xbmc debian package from a git repository."
-    echo "The build is controlled by ENV variables, which van be overridden as appropriate:"
+    echo "$0: This script builds a Kodi debian package from a git repository."
+    echo "The build is controlled by ENV variables, which can be overridden as appropriate:"
     echo "BUILDER is either debuild(default) or pdebuild(needs a proper pbuilder setup)"
     checkEnv
 }
@@ -44,6 +46,7 @@ function checkEnv {
     echo "REPO_DIR: $REPO_DIR"
     getVersion
     echo "RELEASEV: $RELEASEV"
+    echo "REVISION: $TAGREV"
     [[ -n $TAG ]] && echo "TAG: $TAG"
     echo "DISTS: $DISTS"
     echo "ARCHS: $ARCHS"
@@ -72,19 +75,19 @@ function checkEnv {
 function getVersion {
     getGitRev
     if [[ $RELEASEV == "auto" ]]
-    then 
-        local MAJORVER=$(grep VERSION_MAJOR $REPO_DIR/xbmc/GUIInfoManager.h | awk '{ print $3 }')
-        local MINORVER=$(grep VERSION_MINOR $REPO_DIR/xbmc/GUIInfoManager.h | awk '{ print $3 }')
+    then
+        local MAJORVER=$(grep VERSION_MAJOR $REPO_DIR/version.txt | awk '{ print $2 }')
+        local MINORVER=$(grep VERSION_MINOR $REPO_DIR/version.txt | awk '{ print $2 }')
         RELEASEV=${MAJORVER}.${MINORVER}
     else
-        PACKAGEVERSION="${RELEASEV}~git$(date '+%Y%m%d.%H%M')-${TAG}"
+        PACKAGEVERSION="${RELEASEV}~git${BUILD_DATE}-${TAG}"
     fi
 
     if [[ -n ${VERSION_PREFIX} ]]
     then
-        PACKAGEVERSION="${VERSION_PREFIX}:${RELEASEV}~git$(date '+%Y%m%d.%H%M')-${TAG}"
+        PACKAGEVERSION="${VERSION_PREFIX}:${RELEASEV}~git${BUILD_DATE}-${TAG}"
     else
-        PACKAGEVERSION="${RELEASEV}~git$(date '+%Y%m%d.%H%M')-${TAG}"
+        PACKAGEVERSION="${RELEASEV}~git${BUILD_DATE}-${TAG}"
     fi
 }
 
@@ -99,10 +102,11 @@ function archiveRepo {
     cd $REPO_DIR || exit 1
     git clean -xfd
     echo $REV > VERSION
-    DEST="xbmc-${RELEASEV}~git$(date '+%Y%m%d.%H%M')-${TAG}"
+    tools/depends/target/ffmpeg/autobuild.sh -d
+    DEST="kodi-${RELEASEV}~git${BUILD_DATE}-${TAG}"
     [[ -d debian ]] && rm -rf debian
     cd ..
-    tar -czf ${DEST}.tar.gz -h --exclude .git $(basename $REPO_DIR)
+    tar -czf ${DEST}.tar.gz --exclude .git $(basename $REPO_DIR)
     ln -s ${DEST}.tar.gz ${DEST/-/_}.orig.tar.gz
     echo "Output Archive: ${DEST}.tar.gz"
 

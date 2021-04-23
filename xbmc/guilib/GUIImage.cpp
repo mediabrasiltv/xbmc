@@ -1,29 +1,19 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "GUIImage.h"
-#include "TextureManager.h"
-#include "utils/log.h"
-#include "utils/TimeUtils.h"
 
-using namespace std;
+#include "GUIMessage.h"
+#include "utils/log.h"
+
+#include <cassert>
+
+using namespace KODI::GUILIB;
 
 CGUIImage::CGUIImage(int parentID, int controlID, float posX, float posY, float width, float height, const CTextureInfo& texture)
     : CGUIControl(parentID, controlID, posX, posY, width, height)
@@ -37,7 +27,7 @@ CGUIImage::CGUIImage(int parentID, int controlID, float posX, float posY, float 
 }
 
 CGUIImage::CGUIImage(const CGUIImage &left)
-  : CGUIControl(left), 
+  : CGUIControl(left),
   m_image(left.m_image),
   m_info(left.m_info),
   m_texture(left.m_texture),
@@ -53,10 +43,7 @@ CGUIImage::CGUIImage(const CGUIImage &left)
   m_bDynamicResourceAlloc=false;
 }
 
-CGUIImage::~CGUIImage(void)
-{
-
-}
+CGUIImage::~CGUIImage(void) = default;
 
 void CGUIImage::UpdateVisibility(const CGUIListItem *item)
 {
@@ -100,9 +87,9 @@ void CGUIImage::AllocateOnDemand()
 void CGUIImage::Process(unsigned int currentTime, CDirtyRegionList &dirtyregions)
 {
   // check whether our image failed to allocate, and if so drop back to the fallback image
-  if (m_texture.FailedToAlloc() && !m_texture.GetFileName().Equals(m_info.GetFallback()))
+  if (m_texture.FailedToAlloc() && m_texture.GetFileName() != m_info.GetFallback())
   {
-    if (!m_currentFallback.empty() && !m_texture.GetFileName().Equals(m_currentFallback))
+    if (!m_currentFallback.empty() && m_texture.GetFileName() != m_currentFallback)
       m_texture.SetFileName(m_currentFallback);
     else
       m_texture.SetFileName(m_info.GetFallback());
@@ -118,11 +105,13 @@ void CGUIImage::Process(unsigned int currentTime, CDirtyRegionList &dirtyregions
     unsigned int frameTime = 0;
     if (m_lastRenderTime)
       frameTime = currentTime - m_lastRenderTime;
+    if (!frameTime)
+      frameTime = (unsigned int)(1000 / CServiceBroker::GetWinSystem()->GetGfxContext().GetFPS());
     m_lastRenderTime = currentTime;
 
     if (m_fadingTextures.size())  // have some fading images
     { // anything other than the last old texture needs to be faded out as per usual
-      for (vector<CFadingTexture *>::iterator i = m_fadingTextures.begin(); i != m_fadingTextures.end() - 1;)
+      for (std::vector<CFadingTexture *>::iterator i = m_fadingTextures.begin(); i != m_fadingTextures.end() - 1;)
       {
         if (!ProcessFading(*i, frameTime, currentTime))
           i = m_fadingTextures.erase(i);
@@ -174,8 +163,8 @@ void CGUIImage::Render()
 {
   if (!IsVisible()) return;
 
-  for (vector<CFadingTexture *>::iterator itr = m_fadingTextures.begin(); itr != m_fadingTextures.end(); ++itr)
-    (*itr)->m_texture->Render();
+  for (auto& itr : m_fadingTextures)
+    itr->m_texture->Render();
 
   m_texture.Render();
 
@@ -215,6 +204,16 @@ bool CGUIImage::OnMessage(CGUIMessage& message)
   {
     if (!m_info.IsConstant())
       FreeTextures(true); // true as we want to free the texture immediately
+    return true;
+  }
+  else if (message.GetMessage() == GUI_MSG_SET_FILENAME)
+  {
+    SetFileName(message.GetLabel());
+    return true;
+  }
+  else if (message.GetMessage() == GUI_MSG_GET_FILENAME)
+  {
+    message.SetLabel(GetFileName());
     return true;
   }
   return CGUIControl::OnMessage(message);
@@ -287,13 +286,13 @@ CRect CGUIImage::CalcRenderRegion() const
 {
   CRect region = m_texture.GetRenderRect();
 
-  for (vector<CFadingTexture *>::const_iterator itr = m_fadingTextures.begin(); itr != m_fadingTextures.end(); ++itr)
-    region.Union( (*itr)->m_texture->GetRenderRect() );
+  for (const auto& itr : m_fadingTextures)
+    region.Union(itr->m_texture->GetRenderRect());
 
   return CGUIControl::CalcRenderRegion().Intersect(region);
 }
 
-const CStdString &CGUIImage::GetFileName() const
+const std::string &CGUIImage::GetFileName() const
 {
   return m_texture.GetFileName();
 }
@@ -310,7 +309,7 @@ void CGUIImage::SetCrossFade(unsigned int time)
     m_crossFadeTime = 1;
 }
 
-void CGUIImage::SetFileName(const CStdString& strFileName, bool setConstant, const bool useCache)
+void CGUIImage::SetFileName(const std::string& strFileName, bool setConstant, const bool useCache)
 {
   if (setConstant)
     m_info.SetLabel(strFileName, "", GetParentID());
@@ -321,7 +320,7 @@ void CGUIImage::SetFileName(const CStdString& strFileName, bool setConstant, con
   if (m_crossFadeTime)
   {
     // set filename on the next texture
-    if (m_currentTexture.Equals(strFileName))
+    if (m_currentTexture == strFileName)
       return; // nothing to do - we already have this image
 
     if (m_texture.ReadyToRender() || m_texture.GetFileName().empty())
@@ -331,7 +330,7 @@ void CGUIImage::SetFileName(const CStdString& strFileName, bool setConstant, con
     }
     m_currentFadeTime = 0;
   }
-  if (!m_currentTexture.Equals(strFileName))
+  if (m_currentTexture != strFileName)
   { // texture is changing - attempt to load it, and save the name in m_currentTexture.
     // we'll check whether it loaded or not in Render()
     m_currentTexture = strFileName;
@@ -372,7 +371,7 @@ void CGUIImage::SetPosition(float posX, float posY)
   CGUIControl::SetPosition(posX, posY);
 }
 
-void CGUIImage::SetInfo(const CGUIInfoLabel &info)
+void CGUIImage::SetInfo(const GUIINFO::CGUIInfoLabel &info)
 {
   m_info = info;
   // a constant image never needs updating
@@ -394,7 +393,7 @@ unsigned char CGUIImage::GetFadeLevel(unsigned int time) const
   return (unsigned char)(255.0f * (1 - pow(1-alpha, amount))/alpha);
 }
 
-CStdString CGUIImage::GetDescription(void) const
+std::string CGUIImage::GetDescription(void) const
 {
   return GetFileName();
 }

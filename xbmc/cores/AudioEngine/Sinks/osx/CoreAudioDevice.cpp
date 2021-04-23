@@ -1,28 +1,21 @@
 /*
- *      Copyright (C) 2011-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2011-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "CoreAudioDevice.h"
-#include "CoreAudioHelpers.h"
+
 #include "CoreAudioChannelLayout.h"
 #include "CoreAudioHardware.h"
+#include "cores/AudioEngine/Sinks/darwin/CoreAudioHelpers.h"
 #include "utils/log.h"
+
+#include "platform/darwin/DarwinUtils.h"
+
+#include <unistd.h>
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CCoreAudioDevice
@@ -200,12 +193,12 @@ bool CCoreAudioDevice::RemoveIOProc()
 
   m_IoProc = NULL; // Clear the reference no matter what
 
-  Sleep(100);
+  usleep(100000);
 
   return true;
 }
 
-std::string CCoreAudioDevice::GetName()
+std::string CCoreAudioDevice::GetName() const
 {
   if (!m_DeviceId)
     return "";
@@ -213,17 +206,14 @@ std::string CCoreAudioDevice::GetName()
   AudioObjectPropertyAddress  propertyAddress;
   propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
   propertyAddress.mElement  = 0;
-  propertyAddress.mSelector = kAudioDevicePropertyDeviceName;
-
-  UInt32 propertySize;
-  OSStatus ret = AudioObjectGetPropertyDataSize(m_DeviceId, &propertyAddress, 0, NULL, &propertySize);
-  if (ret != noErr)
-    return "";
+  propertyAddress.mSelector = kAudioDevicePropertyDeviceNameCFString;
 
   std::string name;
-  char *buff = new char[propertySize + 1];
-  buff[propertySize] = 0x00;
-  ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, buff);
+  CFStringRef deviceName = NULL;
+  UInt32 propertySize = sizeof(deviceName);
+
+  OSStatus ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, &deviceName);
+
   if (ret != noErr)
   {
     CLog::Log(LOGERROR, "CCoreAudioDevice::GetName: "
@@ -231,30 +221,24 @@ std::string CCoreAudioDevice::GetName()
   }
   else
   {
-    name = buff;
-    name.erase(name.find_last_not_of(" ") + 1);
+    CDarwinUtils::CFStringRefToUTF8String(deviceName, name);
+    CFRelease(deviceName);
   }
-  delete[] buff;
 
   return name;
 }
 
-bool CCoreAudioDevice::IsDigital(UInt32 &transportType)
+bool CCoreAudioDevice::IsDigital() const
 {
   bool isDigital = false;
+  UInt32 transportType = 0;
   if (!m_DeviceId)
     return false;
 
-  AudioObjectPropertyAddress  propertyAddress;
-  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
-  propertyAddress.mElement  = 0;
-  propertyAddress.mSelector = kAudioDevicePropertyTransportType;
+  transportType = GetTransportType();
+  if (transportType == INT_MAX)
+    return false;
 
-  UInt32 propertySize = sizeof(transportType);
-  OSStatus ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, &transportType);
-  if (ret != noErr)
-      return false;
-    
   if (transportType == kIOAudioDeviceTransportTypeFireWire)
     isDigital = true;
   if (transportType == kIOAudioDeviceTransportTypeUSB)
@@ -267,11 +251,29 @@ bool CCoreAudioDevice::IsDigital(UInt32 &transportType)
     isDigital = true;
   if (transportType == kAudioStreamTerminalTypeDigitalAudioInterface)
     isDigital = true;
-    
+
   return isDigital;
 }
 
-UInt32 CCoreAudioDevice::GetTotalOutputChannels()
+UInt32 CCoreAudioDevice::GetTransportType() const
+{
+  UInt32 transportType = 0;
+  if (!m_DeviceId)
+    return INT_MAX;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyTransportType;
+
+  UInt32 propertySize = sizeof(transportType);
+  OSStatus ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, &transportType);
+  if (ret != noErr)
+      return INT_MAX;
+  return transportType;
+}
+
+UInt32 CCoreAudioDevice::GetTotalOutputChannels() const
 {
   UInt32 channels = 0;
 
@@ -300,6 +302,42 @@ UInt32 CCoreAudioDevice::GetTotalOutputChannels()
     CLog::Log(LOGERROR, "CCoreAudioDevice::GetTotalOutputChannels: "
       "Unable to get total device output channels - id: 0x%04x. Error = %s",
       (uint)m_DeviceId, GetError(ret).c_str());
+  }
+
+  free(pList);
+
+  return channels;
+}
+
+UInt32 CCoreAudioDevice::GetNumChannelsOfStream(UInt32 streamIdx) const
+{
+  UInt32 channels = 0;
+
+  if (!m_DeviceId)
+    return channels;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyStreamConfiguration;
+
+  UInt32 size = 0;
+  OSStatus ret = AudioObjectGetPropertyDataSize(m_DeviceId, &propertyAddress, 0, NULL, &size);
+  if (ret != noErr)
+    return channels;
+
+  AudioBufferList* pList = (AudioBufferList*)malloc(size);
+  ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &size, pList);
+  if (ret == noErr)
+  {
+    if (streamIdx < pList->mNumberBuffers)
+      channels = pList->mBuffers[streamIdx].mNumberChannels;
+  }
+  else
+  {
+    CLog::Log(LOGERROR, "CCoreAudioDevice::GetNumChannelsOfStream: "
+              "Unable to get number of stream output channels - id: 0x%04x. Error = %s",
+              (uint)m_DeviceId, GetError(ret).c_str());
   }
 
   free(pList);
@@ -372,7 +410,7 @@ bool CCoreAudioDevice::SetHogStatus(bool hog)
     {
       OSStatus ret = AudioObjectSetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, sizeof(m_HogPid), &m_HogPid);
 
-      // even if setting hogmode was successfull our PID might not get written
+      // even if setting hogmode was successful our PID might not get written
       // into m_HogPid (so it stays -1). Readback hogstatus for judging if we
       // had success on getting hog status
       // We do this only when AudioObjectSetPropertyData didn't set m_HogPid because
@@ -518,7 +556,7 @@ bool CCoreAudioDevice::SetCurrentVolume(Float32 vol)
   return true;
 }
 
-bool CCoreAudioDevice::GetPreferredChannelLayout(CCoreAudioChannelLayout& layout)
+bool CCoreAudioDevice::GetPreferredChannelLayout(CCoreAudioChannelLayout& layout) const
 {
   if (!m_DeviceId)
     return false;
@@ -547,7 +585,118 @@ bool CCoreAudioDevice::GetPreferredChannelLayout(CCoreAudioChannelLayout& layout
   return (ret == noErr);
 }
 
-bool CCoreAudioDevice::GetDataSources(CoreAudioDataSourceList* pList)
+bool CCoreAudioDevice::GetPreferredChannelLayoutForStereo(CCoreAudioChannelLayout &layout) const
+{
+  if (!m_DeviceId)
+    return false;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyPreferredChannelsForStereo;
+
+  UInt32 channels[2];// this will receive the channel labels
+  UInt32 propertySize = sizeof(channels);
+
+  OSStatus ret = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, &channels);
+  if (ret != noErr)
+    CLog::Log(LOGERROR, "CCoreAudioDevice::GetPreferredChannelLayoutForStereo: "
+              "Unable to retrieve preferred channel layout. Error = %s", GetError(ret).c_str());
+  else
+  {
+    // Copy/generate a layout into the result into the caller's instance
+    layout.CopyLayoutForStereo(channels);
+  }
+  return (ret == noErr);
+}
+
+std::string CCoreAudioDevice::GetCurrentDataSourceName() const
+{
+  UInt32 dataSourceId = 0;
+  std::string dataSourceName = "";
+  if(GetDataSource(dataSourceId))
+  {
+    dataSourceName = GetDataSourceName(dataSourceId);
+  }
+  return dataSourceName;
+}
+
+std::string CCoreAudioDevice::GetDataSourceName(UInt32 dataSourceId) const
+{
+  UInt32 propertySize = 0;
+  CFStringRef dataSourceNameCF;
+  std::string dataSourceName;
+  std::string ret = "";
+
+  if (!m_DeviceId)
+    return ret;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyDataSourceNameForIDCFString;
+
+  AudioValueTranslation translation;
+  translation.mInputData = &dataSourceId;
+  translation.mInputDataSize = sizeof(UInt32);
+  translation.mOutputData = &dataSourceNameCF;
+  translation.mOutputDataSize = sizeof ( CFStringRef );
+  propertySize = sizeof(AudioValueTranslation);
+  OSStatus status = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &propertySize, &translation);
+
+  if (( status == noErr ) && dataSourceNameCF )
+  {
+    if (CDarwinUtils::CFStringRefToUTF8String(dataSourceNameCF, dataSourceName))
+    {
+      ret = dataSourceName;
+    }
+    CFRelease ( dataSourceNameCF );
+  }
+
+  return ret;
+}
+
+bool CCoreAudioDevice::GetDataSource(UInt32 &dataSourceId) const
+{
+  bool ret = false;
+
+  if (!m_DeviceId)
+    return false;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyDataSource;
+
+  UInt32 size = sizeof(dataSourceId);
+  OSStatus status = AudioObjectGetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, &size, &dataSourceId);
+  if(status == noErr)
+    ret = true;
+
+  return ret;
+}
+
+bool CCoreAudioDevice::SetDataSource(UInt32 &dataSourceId)
+{
+  bool ret = false;
+
+  if (!m_DeviceId)
+    return false;
+
+  AudioObjectPropertyAddress  propertyAddress;
+  propertyAddress.mScope    = kAudioDevicePropertyScopeOutput;
+  propertyAddress.mElement  = 0;
+  propertyAddress.mSelector = kAudioDevicePropertyDataSource;
+
+  UInt32 size = sizeof(dataSourceId);
+  OSStatus status = AudioObjectSetPropertyData(m_DeviceId, &propertyAddress, 0, NULL, size, &dataSourceId);
+  if(status == noErr)
+    ret = true;
+
+  return ret;
+}
+
+bool CCoreAudioDevice::GetDataSources(CoreAudioDataSourceList* pList) const
 {
   if (!pList || !m_DeviceId)
     return false;
@@ -699,3 +848,70 @@ bool CCoreAudioDevice::SetBufferSize(UInt32 size)
 
   return (ret == noErr);
 }
+
+XbmcThreads::EndTime CCoreAudioDevice::m_callbackSuppressTimer;
+AudioObjectPropertyListenerProc CCoreAudioDevice::m_defaultOutputDeviceChangedCB = NULL;
+
+
+OSStatus CCoreAudioDevice::defaultOutputDeviceChanged(AudioObjectID                       inObjectID,
+                         UInt32                              inNumberAddresses,
+                         const AudioObjectPropertyAddress    inAddresses[],
+                         void*                               inClientData)
+{
+  if (m_callbackSuppressTimer.IsTimePast() && m_defaultOutputDeviceChangedCB != NULL)
+    return m_defaultOutputDeviceChangedCB(inObjectID, inNumberAddresses, inAddresses, inClientData);
+  return 0;
+}
+
+void CCoreAudioDevice::RegisterDeviceChangedCB(bool bRegister, AudioObjectPropertyListenerProc callback, void *ref)
+{
+    OSStatus ret = noErr;
+    AudioObjectPropertyAddress inAdr =
+    {
+        kAudioHardwarePropertyDevices,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMaster
+    };
+
+    if (bRegister)
+        ret = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &inAdr, callback, ref);
+    else
+        ret = AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &inAdr, callback, ref);
+
+    if (ret != noErr)
+        CLog::Log(LOGERROR, "CCoreAudioAE::Deinitialize - error %s a listener callback for device changes!", bRegister?"attaching":"removing");
+}
+
+void CCoreAudioDevice::RegisterDefaultOutputDeviceChangedCB(bool bRegister, AudioObjectPropertyListenerProc callback, void *ref)
+{
+    OSStatus ret = noErr;
+    static int registered = -1;
+
+    //only allow registration once
+    if (bRegister == (registered == 1))
+        return;
+
+    AudioObjectPropertyAddress inAdr =
+    {
+        kAudioHardwarePropertyDefaultOutputDevice,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMaster
+    };
+
+    if (bRegister)
+    {
+        ret = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &inAdr, defaultOutputDeviceChanged, ref);
+        m_defaultOutputDeviceChangedCB = callback;
+    }
+    else
+    {
+        ret = AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &inAdr, defaultOutputDeviceChanged, ref);
+        m_defaultOutputDeviceChangedCB = NULL;
+    }
+
+    if (ret != noErr)
+        CLog::Log(LOGERROR, "CCoreAudioAE::Deinitialize - error %s a listener callback for default output device changes!", bRegister?"attaching":"removing");
+    else
+        registered = bRegister ? 1 : 0;
+}
+

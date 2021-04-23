@@ -51,14 +51,16 @@ NPT_SET_LOCAL_LOGGER("platinum.core.http.server")
 PLT_HttpServer::PLT_HttpServer(NPT_IpAddress address,
                                NPT_IpPort    port,
                                bool          allow_random_port_on_bind_failure,   /* = false */
-                               NPT_Cardinal  max_clients,                         /* = 0 */
+                               NPT_Cardinal  max_clients,                         /* = 50 */
                                bool          reuse_address) :                     /* = false */
+    NPT_HttpServer(address, port, true),
     m_TaskManager(new PLT_TaskManager(max_clients)),
     m_Address(address),
     m_Port(port),
     m_AllowRandomPortOnBindFailure(allow_random_port_on_bind_failure),
     m_ReuseAddress(reuse_address),
-    m_HttpListenTask(NULL)
+    m_Running(false),
+    m_Aborted(false)
 {
 }
 
@@ -68,7 +70,6 @@ PLT_HttpServer::PLT_HttpServer(NPT_IpAddress address,
 PLT_HttpServer::~PLT_HttpServer()
 { 
     Stop();
-    delete m_TaskManager;
 }
 
 /*----------------------------------------------------------------------
@@ -78,6 +79,10 @@ NPT_Result
 PLT_HttpServer::Start()
 {
     NPT_Result res = NPT_FAILURE;
+    
+    // we can't start an already running server or restart an aborted server
+    // because the socket is shared create a new instance
+    if (m_Running || m_Aborted) NPT_CHECK_WARNING(NPT_ERROR_INVALID_STATE);
     
     // if we're given a port for our http server, try it
     if (m_Port) {
@@ -104,17 +109,24 @@ PLT_HttpServer::Start()
 
     // keep track of port server has successfully bound
     m_Port = m_BoundPort;
+
+    // Tell server to try to listen to more incoming sockets
+    // (this could fail silently)
+    if (m_TaskManager->GetMaxTasks() > 20) {
+        m_Socket.Listen(m_TaskManager->GetMaxTasks());
+    }
     
     // start a task to listen for incoming connections
-    // and keep it around so we can abort the server
-    m_HttpListenTask = new PLT_HttpListenTask(this, &m_Socket, false);
-    m_TaskManager->StartTask(m_HttpListenTask, NULL, false);
+    PLT_HttpListenTask *task = new PLT_HttpListenTask(this, &m_Socket, false);
+    NPT_CHECK_SEVERE(m_TaskManager->StartTask(task));
 
     NPT_SocketInfo info;
     m_Socket.GetInfo(info);
     NPT_LOG_INFO_2("HttpServer listening on %s:%d", 
         (const char*)info.local_address.GetIpAddress().ToString(), 
         m_Port);
+    
+    m_Running = true;
     return NPT_SUCCESS;
 }
 
@@ -124,13 +136,15 @@ PLT_HttpServer::Start()
 NPT_Result
 PLT_HttpServer::Stop()
 {
-    if (m_HttpListenTask) {
-        m_HttpListenTask->Kill();
-        m_HttpListenTask = NULL;
-    }
-
+    // we can't restart an aborted server
+    if (m_Aborted || !m_Running) NPT_CHECK_WARNING(NPT_ERROR_INVALID_STATE);
+    
     // stop all other pending tasks 
-    m_TaskManager->StopAllTasks();
+    m_TaskManager->Abort();
+    
+    m_Running = false;
+    m_Aborted = true;
+    
     return NPT_SUCCESS;
 }
 
@@ -146,7 +160,7 @@ PLT_HttpServer::SetupResponse(NPT_HttpRequest&              request,
         (const char*) request.GetMethod(),
         (const char*) context.GetRemoteAddress().ToString(),
         (const char*) request.GetUrl().ToString());
-    PLT_LOG_HTTP_MESSAGE(NPT_LOG_LEVEL_FINE, prefix, &request);
+    PLT_LOG_HTTP_REQUEST(NPT_LOG_LEVEL_FINE, prefix, &request);
 
     NPT_List<NPT_HttpRequestHandler*> handlers = FindRequestHandlers(request);
     if (handlers.GetItemCount() == 0) return NPT_ERROR_NO_SUCH_ITEM;
@@ -176,8 +190,7 @@ PLT_HttpServer::ServeFile(const NPT_HttpRequest&        request,
     NPT_FileInfo             file_info;
     
     // prevent hackers from accessing files outside of our root
-    if ((file_path.Find("/..") >= 0) || (file_path.Find("\\..") >= 0) ||
-        NPT_FAILED(NPT_File::GetInfo(file_path, &file_info))) {
+    if ((file_path.Find("/..") >= 0) || (file_path.Find("\\..") >= 0)) {
         return NPT_ERROR_NO_SUCH_ITEM;
     }
     
@@ -187,7 +200,8 @@ PLT_HttpServer::ServeFile(const NPT_HttpRequest&        request,
     // handle potential 304 only if range header not set
     NPT_DateTime  date;
     NPT_TimeStamp timestamp;
-    if (NPT_SUCCEEDED(PLT_UPnPMessageHelper::GetIfModifiedSince((NPT_HttpMessage&)request, date)) &&
+    if (NPT_SUCCEEDED(NPT_File::GetInfo(file_path, &file_info)) &&
+        NPT_SUCCEEDED(PLT_UPnPMessageHelper::GetIfModifiedSince((NPT_HttpMessage&)request, date)) &&
         !range_spec) {
         date.ToTimeStamp(timestamp);
         

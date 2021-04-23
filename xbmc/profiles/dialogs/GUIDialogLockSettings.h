@@ -1,53 +1,53 @@
-#pragma once
-
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "GUIPassword.h"
-#include "profiles/Profile.h"
-#include "settings/dialogs/GUIDialogSettings.h"
+#pragma once
 
-class CGUIDialogLockSettings : public CGUIDialogSettings
+#include "profiles/Profile.h"
+#include "settings/dialogs/GUIDialogSettingsManualBase.h"
+
+class CGUIDialogLockSettings : public CGUIDialogSettingsManualBase
 {
 public:
-  CGUIDialogLockSettings(void);
-  virtual ~CGUIDialogLockSettings(void);
-  static bool ShowAndGetLock(LockType& iLockMode, CStdString& strPassword, int iHeader=20091);
-  static bool ShowAndGetLock(CProfile::CLock &locks, int iButtonLabel = 20091, bool bConditional = false, bool bDetails = true);
-  static bool ShowAndGetUserAndPassword(CStdString& strUser, CStdString& strPassword, const CStdString& strURL, bool *saveUserDetails);
+  CGUIDialogLockSettings();
+  ~CGUIDialogLockSettings() override;
+
+  static bool ShowAndGetLock(LockType &lockMode, std::string &password, int header = 20091);
+  static bool ShowAndGetLock(CProfile::CLock &locks, int buttonLabel = 20091, bool conditional = false, bool details = true);
+  static bool ShowAndGetUserAndPassword(std::string &user, std::string &password, const std::string &url, bool *saveUserDetails);
+
 protected:
-  virtual void OnCancel();
-  virtual void SetupPage();
-  virtual void CreateSettings();
-  virtual void OnSettingChanged(SettingInfo &setting);
-  void EnableDetails(bool bEnable);
+  // implementations of ISettingCallback
+  void OnSettingChanged(std::shared_ptr<const CSetting> setting) override;
+  void OnSettingAction(std::shared_ptr<const CSetting> setting) override;
+
+  // specialization of CGUIDialogSettingsBase
+  bool AllowResettingSettings() const override { return false; }
+  void Save() override { }
+  void OnCancel() override;
+  void SetupView() override;
+
+  // specialization of CGUIDialogSettingsManualBase
+  void InitializeSettings() override;
+
+private:
+  std::string GetLockModeLabel();
+  void SetDetailSettingsEnabled(bool enabled);
+  void SetSettingLockCodeLabel();
+
+  bool m_changed = false;
 
   CProfile::CLock m_locks;
-  CStdString m_strUser;
-  CStdString m_strURL;
-  bool m_bChanged;
-  bool m_bDetails;
-  bool m_bConditionalDetails;
-  bool m_bGetUser;
-  int m_iButtonLabel;
-  bool *m_saveUserDetails;
+  std::string m_user;
+  std::string m_url;
+  bool m_details = true;
+  bool m_conditionalDetails = false;
+  bool m_getUser = false;
+  bool* m_saveUserDetails;
+  int m_buttonLabel = 20091;
 };
-
-

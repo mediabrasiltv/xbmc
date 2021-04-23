@@ -245,7 +245,7 @@ class PLT_MediaController : public PLT_CtrlPointListener
 public:
     PLT_MediaController(PLT_CtrlPointReference&      ctrl_point, 
                         PLT_MediaControllerDelegate* delegate = NULL);
-    virtual ~PLT_MediaController();
+    ~PLT_MediaController() override;
 
     // public methods
     virtual void SetDelegate(PLT_MediaControllerDelegate* delegate) {
@@ -253,10 +253,10 @@ public:
     }
 
     // PLT_CtrlPointListener methods
-    virtual NPT_Result OnDeviceAdded(PLT_DeviceDataReference& device);
-    virtual NPT_Result OnDeviceRemoved(PLT_DeviceDataReference& device);
-    virtual NPT_Result OnActionResponse(NPT_Result res, PLT_ActionReference& action, void* userdata);
-    virtual NPT_Result OnEventNotify(PLT_Service* service, NPT_List<PLT_StateVariable*>* vars);
+    NPT_Result OnDeviceAdded(PLT_DeviceDataReference& device) override;
+    NPT_Result OnDeviceRemoved(PLT_DeviceDataReference& device) override;
+    NPT_Result OnActionResponse(NPT_Result res, PLT_ActionReference& action, void* userdata) override;
+    NPT_Result OnEventNotify(PLT_Service* service, NPT_List<PLT_StateVariable*>* vars) override;
 
     // AVTransport
     NPT_Result GetCurrentTransportActions(PLT_DeviceDataReference& device, NPT_UInt32 instance_id, void* userdata);
@@ -270,6 +270,7 @@ public:
     NPT_Result Play(PLT_DeviceDataReference&  device, NPT_UInt32 instance_id, NPT_String speed, void* userdata);
     NPT_Result Previous(PLT_DeviceDataReference& device, NPT_UInt32 instance_id, void* userdata);
     NPT_Result Seek(PLT_DeviceDataReference&  device, NPT_UInt32 instance_id, NPT_String unit, NPT_String target, void* userdata);
+    bool       CanSetNextAVTransportURI(PLT_DeviceDataReference& device);
     NPT_Result SetAVTransportURI(PLT_DeviceDataReference& device, NPT_UInt32 instance_id, const char* uri, const char* metadata, void* userdata);
     NPT_Result SetNextAVTransportURI(PLT_DeviceDataReference& device, NPT_UInt32 instance_id, const char* next_uri, const char* next_metadata, void* userdata);
     NPT_Result SetPlayMode(PLT_DeviceDataReference&  device, NPT_UInt32 instance_id, NPT_String new_play_mode, void* userdata);

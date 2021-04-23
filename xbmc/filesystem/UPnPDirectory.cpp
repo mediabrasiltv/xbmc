@@ -1,38 +1,30 @@
 /*
  * UPnP Support for XBMC
- *      Copyright (c) 2006 c0diq (Sylvain Rebaud)
+ *  Copyright (c) 2006 c0diq (Sylvain Rebaud)
  *      Portions Copyright (c) by the authors of libPlatinum
  *      http://www.plutinosoft.com/blog/category/platinum/
  *
- *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2010-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 #include "UPnPDirectory.h"
+
+#include "FileItem.h"
+#include "ServiceBroker.h"
 #include "URL.h"
 #include "network/upnp/UPnP.h"
 #include "network/upnp/UPnPInternal.h"
-#include "Platinum.h"
-#include "PltSyncMediaBrowser.h"
-#include "video/VideoInfoTag.h"
-#include "FileItem.h"
-#include "utils/log.h"
-#include "utils/URIUtils.h"
+#include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include "utils/StringUtils.h"
+#include "utils/URIUtils.h"
+#include "utils/log.h"
+
+#include <Platinum/Source/Devices/MediaServer/PltSyncMediaBrowser.h>
+#include <Platinum/Source/Platinum/Platinum.h>
 
 using namespace MUSIC_INFO;
 using namespace XFILE;
@@ -41,7 +33,7 @@ using namespace UPNP;
 namespace XFILE
 {
 
-static CStdString GetContentMapping(NPT_String& objectClass)
+static std::string GetContentMapping(NPT_String& objectClass)
 {
     struct SClassMapping
     {
@@ -110,9 +102,9 @@ static bool FindDeviceWait(CUPnP* upnp, const char* uuid, PLT_DeviceDataReferenc
 |   CUPnPDirectory::GetFriendlyName
 +---------------------------------------------------------------------*/
 const char*
-CUPnPDirectory::GetFriendlyName(const char* url)
+CUPnPDirectory::GetFriendlyName(const CURL& url)
 {
-    NPT_String path = url;
+    NPT_String path = url.Get().c_str();
     if (!path.EndsWith("/")) path += "/";
 
     if (path.Left(7).Compare("upnp://", true) != 0) {
@@ -142,15 +134,18 @@ CUPnPDirectory::GetFriendlyName(const char* url)
 +---------------------------------------------------------------------*/
 bool CUPnPDirectory::GetResource(const CURL& path, CFileItem &item)
 {
-    if(path.GetProtocol() != "upnp")
+    if (!CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_SERVICES_UPNP))
+      return false;
+
+    if(!path.IsProtocol("upnp"))
       return false;
 
     CUPnP* upnp = CUPnP::GetInstance();
     if(!upnp)
         return false;
 
-    CStdString uuid   = path.GetHostName();
-    CStdString object = path.GetFileName();
+    std::string uuid   = path.GetHostName();
+    std::string object = path.GetFileName();
     StringUtils::TrimRight(object, "/");
     object = CURL::Decode(object);
 
@@ -183,15 +178,18 @@ bool CUPnPDirectory::GetResource(const CURL& path, CFileItem &item)
 |   CUPnPDirectory::GetDirectory
 +---------------------------------------------------------------------*/
 bool
-CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
+CUPnPDirectory::GetDirectory(const CURL& url, CFileItemList &items)
 {
+    if (!CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_SERVICES_UPNP))
+      return false;
+
     CUPnP* upnp = CUPnP::GetInstance();
 
     /* upnp should never be cached, it has internal cache */
     items.SetCacheToDisc(CFileItemList::CACHE_NEVER);
 
     // We accept upnp://devuuid/[item_id/]
-    NPT_String path = strPath.c_str();
+    NPT_String path = url.Get().c_str();
     if (!path.StartsWith("upnp://", true)) {
         return false;
     }
@@ -207,7 +205,7 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
             NPT_String uuid = (*device)->GetUUID();
 
             CFileItemPtr pItem(new CFileItem((const char*)name));
-            pItem->SetPath(CStdString((const char*) "upnp://" + uuid + "/"));
+            pItem->SetPath(std::string((const char*) "upnp://" + uuid + "/"));
             pItem->m_bIsFolder = true;
             pItem->SetArt("thumb", (const char*)(*device)->GetIconUrl("image/png"));
 
@@ -225,7 +223,7 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
         NPT_String object_id = (next_slash==-1)?"":path.SubString(next_slash+1);
         object_id.TrimRight("/");
         if (object_id.GetLength()) {
-            object_id = CStdString(CURL::Decode((char*)object_id));
+            object_id = CURL::Decode((char*)object_id).c_str();
         }
 
         // try to find the device with wait on startup
@@ -319,13 +317,13 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
 
             // keep count of classes
             classes[(*entry)->m_ObjectClass.type]++;
-            CFileItemPtr pItem = BuildObject(*entry);
+            CFileItemPtr pItem = BuildObject(*entry, UPnPClient);
             if(!pItem) {
                 ++entry;
                 continue;
             }
 
-            CStdString id;
+            std::string id;
             if ((*entry)->m_ReferenceID.IsEmpty())
                 id = (const char*) (*entry)->m_ObjectID;
             else
@@ -333,7 +331,7 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
 
             id = CURL::Encode(id);
             URIUtils::AddSlashAtEnd(id);
-            pItem->SetPath(CStdString((const char*) "upnp://" + uuid + "/" + id.c_str()));
+            pItem->SetPath(std::string((const char*) "upnp://" + uuid + "/" + id.c_str()));
 
             items.Add(pItem);
 
@@ -342,12 +340,12 @@ CUPnPDirectory::GetDirectory(const CStdString& strPath, CFileItemList &items)
 
         NPT_String max_string = "";
         int        max_count  = 0;
-        for(std::map<NPT_String, int>::iterator it = classes.begin(); it != classes.end(); it++)
+        for (auto& it : classes)
         {
-          if(it->second > max_count)
+          if (it.second > max_count)
           {
-            max_string = it->first;
-            max_count  = it->second;
+            max_string = it.first;
+            max_count = it.second;
           }
         }
         std::string content = GetContentMapping(max_string);

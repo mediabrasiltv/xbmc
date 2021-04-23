@@ -1,29 +1,18 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "threads/SystemClock.h"
-#include "system.h"
-#include "utils/log.h"
-#include "threads/SingleLock.h"
-#include "utils/TimeUtils.h"
 #include "CircularCache.h"
+
+#include "threads/SingleLock.h"
+#include "threads/SystemClock.h"
+
+#include <algorithm>
+#include <string.h>
 
 using namespace XFILE;
 
@@ -36,7 +25,7 @@ CCircularCache::CCircularCache(size_t front, size_t back)
  , m_size(front + back)
  , m_size_back(back)
 #ifdef TARGET_WINDOWS
- , m_handle(INVALID_HANDLE_VALUE)
+ , m_handle(NULL)
 #endif
 {
 }
@@ -56,7 +45,7 @@ int CCircularCache::Open()
 #else
   m_buf = new uint8_t[m_size];
 #endif
-  if(m_buf == 0)
+  if (m_buf == NULL)
     return CACHE_RC_ERROR;
   m_beg = 0;
   m_end = 0;
@@ -67,13 +56,27 @@ int CCircularCache::Open()
 void CCircularCache::Close()
 {
 #ifdef TARGET_WINDOWS
-  UnmapViewOfFile(m_buf);
-  CloseHandle(m_handle);
-  m_handle = INVALID_HANDLE_VALUE;
+  if (m_buf != NULL)
+    UnmapViewOfFile(m_buf);
+  if (m_handle != NULL)
+    CloseHandle(m_handle);
+  m_handle = NULL;
 #else
   delete[] m_buf;
 #endif
   m_buf = NULL;
+}
+
+size_t CCircularCache::GetMaxWriteSize(const size_t& iRequestSize)
+{
+  CSingleLock lock(m_sync);
+
+  size_t back  = (size_t)(m_cur - m_beg); // Backbuffer size
+  size_t front = (size_t)(m_end - m_cur); // Frontbuffer size
+  size_t limit = m_size - std::min(back, m_size_back) - front;
+
+  // Never return more than limit and size requested by caller
+  return std::min(iRequestSize, limit);
 }
 
 /**
@@ -118,6 +121,9 @@ int CCircularCache::WriteToCache(const char *buf, size_t len)
   if(len == 0)
     return 0;
 
+  if (m_buf == NULL)
+    return 0;
+
   // write the data
   memcpy(m_buf + pos, buf, len);
   m_end += len;
@@ -158,6 +164,9 @@ int CCircularCache::ReadFromCache(char *buf, size_t len)
   if(len == 0)
     return 0;
 
+  if (m_buf == NULL)
+    return 0;
+
   memcpy(buf, m_buf + pos, len);
   m_cur += len;
 
@@ -166,7 +175,11 @@ int CCircularCache::ReadFromCache(char *buf, size_t len)
   return len;
 }
 
-int64_t CCircularCache::WaitForData(unsigned int minumum, unsigned int millis)
+/* Wait "millis" milliseconds for "minimum" amount of data to come in.
+ * Note that caller needs to make sure there's sufficient space in the forward
+ * buffer for "minimum" bytes else we may block the full timeout time
+ */
+int64_t CCircularCache::WaitForData(unsigned int minimum, unsigned int millis)
 {
   CSingleLock lock(m_sync);
   int64_t avail = m_end - m_cur;
@@ -174,11 +187,11 @@ int64_t CCircularCache::WaitForData(unsigned int minumum, unsigned int millis)
   if(millis == 0 || IsEndOfInput())
     return avail;
 
-  if(minumum > m_size - m_size_back)
-    minumum = m_size - m_size_back;
+  if(minimum > m_size - m_size_back)
+    minimum = m_size - m_size_back;
 
   XbmcThreads::EndTime endtime(millis);
-  while (!IsEndOfInput() && avail < minumum && !endtime.IsTimePast() )
+  while (!IsEndOfInput() && avail < minimum && !endtime.IsTimePast() )
   {
     lock.Leave();
     m_written.WaitMSec(50); // may miss the deadline. shouldn't be a problem.
@@ -197,6 +210,11 @@ int64_t CCircularCache::Seek(int64_t pos)
   // we try to avoid a (heavy) seek on the source
   if (pos >= m_end && pos < m_end + 100000)
   {
+    /* Make everything in the cache (back & forward) back-cache, to make sure
+     * there's sufficient forward space. Increasing it with only 100000 may not be
+     * sufficient due to variable filesystem chunksize
+     */
+    m_cur = m_end;
     lock.Leave();
     WaitForData((size_t)(pos - m_cur), 5000);
     lock.Enter();
@@ -211,17 +229,19 @@ int64_t CCircularCache::Seek(int64_t pos)
   return CACHE_RC_ERROR;
 }
 
-void CCircularCache::Reset(int64_t pos, bool clearAnyway)
+bool CCircularCache::Reset(int64_t pos, bool clearAnyway)
 {
   CSingleLock lock(m_sync);
   if (!clearAnyway && IsCachedPosition(pos))
   {
     m_cur = pos;
-    return;
+    return false;
   }
   m_end = pos;
   m_beg = pos;
   m_cur = pos;
+
+  return true;
 }
 
 int64_t CCircularCache::CachedDataEndPosIfSeekTo(int64_t iFilePosition)

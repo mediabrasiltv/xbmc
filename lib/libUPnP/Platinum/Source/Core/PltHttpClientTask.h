@@ -62,17 +62,15 @@ friend class PLT_ThreadTask;
 public:
     PLT_HttpClientSocketTask(NPT_HttpRequest* request = NULL, 
                              bool             wait_forever = false);
+    ~PLT_HttpClientSocketTask() override;
 
     virtual NPT_Result AddRequest(NPT_HttpRequest* request);
     virtual NPT_Result SetHttpClientConfig(const NPT_HttpClient::Config& config);
 
 protected:
-    virtual ~PLT_HttpClientSocketTask();
-
-protected:
     // PLT_ThreadTask methods
-    virtual void DoAbort();
-    virtual void DoRun();
+    void DoAbort() override;
+    void DoRun() override;
 
     virtual NPT_Result ProcessResponse(NPT_Result                    res, 
                                        const NPT_HttpRequest&        request, 
@@ -105,14 +103,14 @@ public:
                                                      NPT_HTTP_PROTOCOL_1_1)), 
                                  m_Data(data) {}
  protected:
-    virtual ~PLT_HttpClientTask<T>() {}
+    ~PLT_HttpClientTask<T>() override {}
 
 protected:
     // PLT_HttpClientSocketTask method
     NPT_Result ProcessResponse(NPT_Result                    res, 
                                const NPT_HttpRequest&        request, 
                                const NPT_HttpRequestContext& context, 
-                               NPT_HttpResponse*             response) {
+                               NPT_HttpResponse*             response) override {
         return m_Data->ProcessResponse(res, request, context, response);
     }
 

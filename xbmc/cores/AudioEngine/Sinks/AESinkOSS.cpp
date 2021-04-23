@@ -1,29 +1,18 @@
 /*
- *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2010-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "AESinkOSS.h"
 #include <stdint.h>
 #include <limits.h>
+#include <unistd.h>
 
+#include "cores/AudioEngine/AESinkFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
-#include "utils/StdString.h"
 #include "utils/log.h"
 #include "threads/SingleLock.h"
 #include <sstream>
@@ -66,7 +55,6 @@ static int OSSSampleRateList[] =
 CAESinkOSS::CAESinkOSS()
 {
   m_fd = 0;
-  m_blockingNeedsUpdate = true;
 }
 
 CAESinkOSS::~CAESinkOSS()
@@ -74,7 +62,26 @@ CAESinkOSS::~CAESinkOSS()
   Deinitialize();
 }
 
-std::string CAESinkOSS::GetDeviceUse(const AEAudioFormat format, const std::string &device)
+void CAESinkOSS::Register()
+{
+  AE::AESinkRegEntry entry;
+  entry.sinkName = "OSS";
+  entry.createFunc = CAESinkOSS::Create;
+  entry.enumerateFunc = CAESinkOSS::EnumerateDevicesEx;
+  AE::CAESinkFactory::RegisterSink(entry);
+}
+
+IAESink* CAESinkOSS::Create(std::string &device, AEAudioFormat& desiredFormat)
+{
+  IAESink* sink = new CAESinkOSS();
+  if (sink->Initialize(desiredFormat, device))
+    return sink;
+
+  delete sink;
+  return nullptr;
+}
+
+std::string CAESinkOSS::GetDeviceUse(const AEAudioFormat& format, const std::string &device)
 {
 #ifdef OSS4
   if (AE_IS_RAW(format.m_dataFormat))
@@ -145,16 +152,14 @@ bool CAESinkOSS::Initialize(AEAudioFormat &format, std::string &device)
     oss_fmt = AFMT_S16_BE;
   else if ((format.m_dataFormat == AE_FMT_S16LE) && (format_mask & AFMT_S16_LE))
     oss_fmt = AFMT_S16_LE;
-  else if ((format.m_dataFormat == AE_FMT_S8   ) && (format_mask & AFMT_S8    ))
-    oss_fmt = AFMT_S8;
   else if ((format.m_dataFormat == AE_FMT_U8   ) && (format_mask & AFMT_U8    ))
     oss_fmt = AFMT_U8;
-  else if ((AE_IS_RAW(format.m_dataFormat)     ) && (format_mask & AFMT_AC3   ))
+  else if (((format.m_dataFormat == AE_FMT_RAW)     ) && (format_mask & AFMT_AC3   ))
   {
     oss_fmt = AFMT_AC3;
     format.m_dataFormat = AE_FMT_S16NE;
   }
-  else if (AE_IS_RAW(format.m_dataFormat))
+  else if (format.m_dataFormat == AE_FMT_RAW)
   {
     close(m_fd);
     CLog::Log(LOGERROR, "CAESinkOSS::Initialize - Failed to find a suitable RAW output format");
@@ -205,11 +210,6 @@ bool CAESinkOSS::Initialize(AEAudioFormat &format, std::string &device)
     {
       oss_fmt = AFMT_S16_LE;
       format.m_dataFormat = AE_FMT_S16LE;
-    }
-    else if (format_mask & AFMT_S8    )
-    {
-      oss_fmt = AFMT_S8;
-      format.m_dataFormat = AE_FMT_S8;
     }
     else if (format_mask & AFMT_U8    )
     {
@@ -328,7 +328,6 @@ bool CAESinkOSS::Initialize(AEAudioFormat &format, std::string &device)
   format.m_sampleRate    = oss_sr;
   format.m_frameSize     = (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3) * format.m_channelLayout.Count();
   format.m_frames        = bi.fragsize / format.m_frameSize;
-  format.m_frameSamples  = format.m_frames * format.m_channelLayout.Count();
 
   m_device = device;
   m_format = format;
@@ -341,21 +340,34 @@ void CAESinkOSS::Deinitialize()
 
   if (m_fd != -1)
     close(m_fd);
-  
-  m_blockingNeedsUpdate = true;
 }
 
-inline CAEChannelInfo CAESinkOSS::GetChannelLayout(AEAudioFormat format)
+inline CAEChannelInfo CAESinkOSS::GetChannelLayout(const AEAudioFormat& format)
 {
   unsigned int count = 0;
 
-       if (format.m_dataFormat == AE_FMT_AC3 ||
-           format.m_dataFormat == AE_FMT_DTS ||
-           format.m_dataFormat == AE_FMT_EAC3)
-           count = 2;
-  else if (format.m_dataFormat == AE_FMT_TRUEHD ||
-           format.m_dataFormat == AE_FMT_DTSHD)
-           count = 8;
+  if (format.m_dataFormat == AE_FMT_RAW)
+  {
+    switch (format.m_streamInfo.m_type)
+    {
+    case CAEStreamInfo::STREAM_TYPE_DTSHD_MA:
+    case CAEStreamInfo::STREAM_TYPE_TRUEHD:
+      count = 8;
+      break;
+    case CAEStreamInfo::STREAM_TYPE_DTSHD_CORE:
+    case CAEStreamInfo::STREAM_TYPE_DTS_512:
+    case CAEStreamInfo::STREAM_TYPE_DTS_1024:
+    case CAEStreamInfo::STREAM_TYPE_DTS_2048:
+    case CAEStreamInfo::STREAM_TYPE_AC3:
+    case CAEStreamInfo::STREAM_TYPE_EAC3:
+    case CAEStreamInfo::STREAM_TYPE_DTSHD:
+      count = 2;
+      break;
+    default:
+      count = 0;
+      break;
+    }
+  }
   else
   {
     for (unsigned int c = 0; c < 8; ++c)
@@ -382,19 +394,25 @@ void CAESinkOSS::Stop()
 #endif
 }
 
-double CAESinkOSS::GetDelay()
+void CAESinkOSS::GetDelay(AEDelayStatus& status)
 {
   if (m_fd == -1)
-    return 0.0;
-  
+  {
+    status.SetDelay(0);
+    return;
+  }
+
   int delay;
   if (ioctl(m_fd, SNDCTL_DSP_GETODELAY, &delay) == -1)
-    return 0.0;
+  {
+    status.SetDelay(0);
+    return;
+  }
 
-  return (double)delay / (m_format.m_frameSize * m_format.m_sampleRate);
+  status.SetDelay((double)delay / (m_format.m_frameSize * m_format.m_sampleRate));
 }
 
-unsigned int CAESinkOSS::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio, bool blocking)
+unsigned int CAESinkOSS::AddPackets(uint8_t **data, unsigned int frames, unsigned int offset)
 {
   int size = frames * m_format.m_frameSize;
   if (m_fd == -1)
@@ -403,24 +421,10 @@ unsigned int CAESinkOSS::AddPackets(uint8_t *data, unsigned int frames, bool has
     return INT_MAX;
   }
 
-  if(m_blockingNeedsUpdate)
-  {
-    if(!blocking)
-    {
-      if (fcntl(m_fd, F_SETFL,  fcntl(m_fd, F_GETFL, 0) | O_NONBLOCK) == -1)
-      {
-        CLog::Log(LOGERROR, "CAESinkOSS::Initialize - Failed to set non blocking writes");
-      }
-    }
-    m_blockingNeedsUpdate = false;
-  }
-
-  int wrote = write(m_fd, data, size);
+  void *buffer = data[0]+offset*m_format.m_frameSize;
+  int wrote = write(m_fd, buffer, size);
   if (wrote < 0)
   {
-    if(!blocking && (errno == EAGAIN || errno == EWOULDBLOCK))
-      return 0;
-
     CLog::Log(LOGERROR, "CAESinkOSS::AddPackets - Failed to write");
     return INT_MAX;
   }
@@ -449,7 +453,7 @@ void CAESinkOSS::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
     CLog::Log(LOGNOTICE,
 	  "CAESinkOSS::EnumerateDevicesEx - No OSS mixer device present: %s", mixerdev);
     return;
-  }	
+  }
 
 #if defined(SNDCTL_SYSINFO) && defined(SNDCTL_CARDINFO)
   oss_sysinfo sysinfo;
@@ -478,13 +482,38 @@ void CAESinkOSS::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
     devicename << cardinfo.shortname << " " << cardinfo.longname;
     info.m_displayName = devicename.str();
 
-    if (info.m_displayName.find("HDMI") != std::string::npos)
+    info.m_dataFormats.push_back(AE_FMT_S16NE);
+    info.m_dataFormats.push_back(AE_FMT_S32NE);
+    if (info.m_displayName.find("HDMI") != std::string::npos
+    ||  info.m_displayName.find("DisplayPort") != std::string::npos)
+    {
       info.m_deviceType = AE_DEVTYPE_HDMI;
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_AC3);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_512);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_EAC3);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_MA);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_TRUEHD);
+      info.m_dataFormats.push_back(AE_FMT_RAW);
+    }
     else if (info.m_displayName.find("Digital") != std::string::npos)
+    {
       info.m_deviceType = AE_DEVTYPE_IEC958;
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_AC3);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTSHD_CORE);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_1024);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_2048);
+      info.m_streamTypes.push_back(CAEStreamInfo::STREAM_TYPE_DTS_512);
+      info.m_dataFormats.push_back(AE_FMT_RAW);
+    }
     else
+    {
       info.m_deviceType = AE_DEVTYPE_PCM;
- 
+    }
+
     oss_audioinfo ainfo;
     memset(&ainfo, 0, sizeof(ainfo));
     ainfo.dev = i;
@@ -504,6 +533,7 @@ void CAESinkOSS::EnumerateDevicesEx(AEDeviceInfoList &list, bool force)
         if (*rate >= ainfo.min_rate && *rate <= ainfo.max_rate)
           info.m_sampleRates.push_back(*rate);
     }
+    info.m_wantsIECPassthrough = true;
     list.push_back(info);
   }
 #endif

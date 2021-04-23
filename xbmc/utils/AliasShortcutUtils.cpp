@@ -1,56 +1,31 @@
 /*
- *      Copyright (C) 2009-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2009-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #if defined(TARGET_DARWIN_OSX)
-#include <CoreServices/CoreServices.h>
 #include "utils/URIUtils.h"
+#include "platform/darwin/DarwinUtils.h"
 #elif defined(TARGET_POSIX)
 #else
 #endif
 
 #include "AliasShortcutUtils.h"
+#include "utils/log.h"
 
-bool IsAliasShortcut(const std::string& path)
+bool IsAliasShortcut(const std::string& path, bool isdirectory)
 {
   bool  rtn = false;
 
 #if defined(TARGET_DARWIN_OSX)
   // Note: regular files that have an .alias extension can be
   //   reported as an alias when clearly, they are not. Trap them out.
-  if (!URIUtils::HasExtension(path, ".alias"))
+  if (!URIUtils::HasExtension(path, ".alias"))//! @todo - check if this is still needed with the new API
   {
-    FSRef fileRef;
-    Boolean targetIsFolder, wasAliased;
-
-    // It is better to call FSPathMakeRefWithOptions and pass kFSPathMakeRefDefaultOptions
-    //   since it will succeed for paths such as "/Volumes" unlike FSPathMakeRef.
-    if (noErr == FSPathMakeRefWithOptions((UInt8*)path.c_str(), kFSPathMakeRefDefaultOptions, &fileRef, NULL))
-    {
-      if (noErr == FSIsAliasFile(&fileRef, &wasAliased, &targetIsFolder))
-      {
-        if (wasAliased)
-        {
-          rtn = true;
-        }
-      }
-    }
+    rtn = CDarwinUtils::IsAliasShortcut(path, isdirectory);
   }
 #elif defined(TARGET_POSIX)
   // Linux does not use alias or shortcut methods
@@ -68,26 +43,12 @@ bool IsAliasShortcut(const std::string& path)
 void TranslateAliasShortcut(std::string& path)
 {
 #if defined(TARGET_DARWIN_OSX)
-  FSRef fileRef;
-  Boolean targetIsFolder, wasAliased;
-
-  if (noErr == FSPathMakeRefWithOptions((UInt8*)path.c_str(), kFSPathMakeRefDefaultOptions, &fileRef, NULL))
-  {
-    if (noErr == FSResolveAliasFileWithMountFlags(&fileRef, TRUE, &targetIsFolder, &wasAliased, kResolveAliasFileNoUI))
-    {
-      if (wasAliased)
-      {
-        char real_path[PATH_MAX];
-        if (noErr == FSRefMakePath(&fileRef, (UInt8*)real_path, PATH_MAX))
-        {
-          path = real_path;
-        }
-      }
-    }
-  }
+  CDarwinUtils::TranslateAliasShortcut(path);
 #elif defined(TARGET_POSIX)
   // Linux does not use alias or shortcut methods
-
+#elif defined(TARGET_WINDOWS_STORE)
+  // Win10 does not use alias or shortcut methods
+  CLog::Log(LOGDEBUG, "%s is not implemented", __FUNCTION__);
 #elif defined(TARGET_WINDOWS)
 /* Needs testing under Windows platform so ignore shortcuts for now
   CComPtr<IShellLink> ipShellLink;

@@ -1,47 +1,31 @@
-#ifndef _ENCODERFFMPEG_H
-#define _ENCODERFFMPEG_H
-
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "Encoder.h"
-#include "DllAvFormat.h"
-#include "DllAvCodec.h"
-#include "DllAvUtil.h"
-#include "DllSwResample.h"
+#pragma once
 
-class CEncoderFFmpeg : public CEncoder
+#include "IEncoder.h"
+
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+}
+
+class CEncoderFFmpeg : public IEncoder
 {
 public:
   CEncoderFFmpeg();
-  virtual ~CEncoderFFmpeg() {}
-  bool Init(const char* strFile, int iInChannels, int iInRate, int iInBits);
-  int Encode(int nNumBytesRead, uint8_t* pbtStream);
-  bool Close();
-  void AddTag(int key, const char* value);
+  ~CEncoderFFmpeg() override = default;
 
+  bool Init(AddonToKodiFuncTable_AudioEncoder& callbacks) override;
+  int Encode(int nNumBytesRead, uint8_t *pbtStream) override;
+  bool Close() override;
 private:
-  DllAvCodec  m_dllAvCodec;
-  DllAvUtil   m_dllAvUtil;
-  DllAvFormat m_dllAvFormat;
-  DllSwResample m_dllSwResample;
 
   AVFormatContext  *m_Format;
   AVCodecContext   *m_CodecCtx;
@@ -59,20 +43,20 @@ private:
   unsigned char     m_BCBuffer[4096];
   static int        avio_write_callback(void *opaque, uint8_t *buf, int buf_size);
   static int64_t    avio_seek_callback(void *opaque, int64_t offset, int whence);
-  void              SetTag(const CStdString tag, const CStdString value);
-
+  void              SetTag(const std::string &tag, const std::string &value);
 
   unsigned int      m_NeededFrames;
   unsigned int      m_NeededBytes;
   uint8_t          *m_Buffer;
-  unsigned int      m_BufferSize;
+  unsigned int      m_BufferSize = 0;
   AVFrame          *m_BufferFrame;
   uint8_t          *m_ResampledBuffer;
-  unsigned int      m_ResampledBufferSize;
+  unsigned int      m_ResampledBufferSize = 0;
   AVFrame          *m_ResampledFrame;
-  bool              m_NeedConversion;
+  bool              m_NeedConversion = false;
+
+  AddonToKodiFuncTable_AudioEncoder m_callbacks;
 
   bool WriteFrame();
 };
 
-#endif // _ENCODERFFMPEG_H

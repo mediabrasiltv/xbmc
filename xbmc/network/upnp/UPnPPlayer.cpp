@@ -1,45 +1,42 @@
 /*
- *      Copyright (c) 2006 elupus (Joakim Plate)
- *      Copyright (C) 2006-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (c) 2006 elupus (Joakim Plate)
+ *  Copyright (C) 2006-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
-
 #include "UPnPPlayer.h"
+
+#include "Application.h"
+#include "FileItem.h"
+#include "GUIInfoManager.h"
+#include "ServiceBroker.h"
+#include "ThumbLoader.h"
 #include "UPnP.h"
 #include "UPnPInternal.h"
-#include "Platinum.h"
-#include "PltMediaController.h"
-#include "PltDidl.h"
-#include "FileItem.h"
-#include "threads/Event.h"
-#include "utils/log.h"
-#include "utils/TimeUtils.h"
-#include "GUIInfoManager.h"
-#include "ThumbLoader.h"
-#include "video/VideoThumbLoader.h"
-#include "music/MusicThumbLoader.h"
-#include "ApplicationMessenger.h"
-#include "Application.h"
+#include "cores/DataCacheCore.h"
 #include "dialogs/GUIDialogBusy.h"
+#include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/Key.h"
-#include "dialogs/GUIDialogYesNo.h"
+#include "input/Key.h"
+#include "messaging/ApplicationMessenger.h"
+#include "messaging/helpers/DialogHelper.h"
+#include "music/MusicThumbLoader.h"
+#include "threads/Event.h"
+#include "utils/TimeUtils.h"
+#include "utils/Variant.h"
+#include "utils/log.h"
+#include "video/VideoThumbLoader.h"
+#include "windowing/WinSystem.h"
 
+#include <Platinum/Source/Devices/MediaRenderer/PltMediaController.h>
+#include <Platinum/Source/Devices/MediaServer/PltDidl.h>
+#include <Platinum/Source/Platinum/Platinum.h>
+
+using namespace KODI::MESSAGING;
+
+using KODI::MESSAGING::HELPERS::DialogResponse;
 
 NPT_SET_LOCAL_LOGGER("xbmc.upnp.player")
 
@@ -58,11 +55,11 @@ public:
     , m_callback(callback)
     , m_postime(0)
   {
-    memset(&m_posinfo, 0, sizeof(m_posinfo));
+    m_posinfo = {};
     m_device->FindServiceByType("urn:schemas-upnp-org:service:AVTransport:1", m_transport);
   }
 
-  virtual void OnSetAVTransportURIResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata)
+  void OnSetAVTransportURIResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata) override
   {
     if(NPT_FAILED(res))
       CLog::Log(LOGERROR, "UPNP: CUPnPPlayer : OnSetAVTransportURIResult failed");
@@ -70,7 +67,7 @@ public:
     m_resevent.Set();
   }
 
-  virtual void OnPlayResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata)
+  void OnPlayResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata) override
   {
     if(NPT_FAILED(res))
       CLog::Log(LOGERROR, "UPNP: CUPnPPlayer : OnPlayResult failed");
@@ -78,7 +75,7 @@ public:
     m_resevent.Set();
   }
 
-  virtual void OnStopResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata)
+  void OnStopResult(NPT_Result res, PLT_DeviceDataReference& device, void* userdata) override
   {
     if(NPT_FAILED(res))
       CLog::Log(LOGERROR, "UPNP: CUPnPPlayer : OnStopResult failed");
@@ -86,13 +83,13 @@ public:
     m_resevent.Set();
   }
 
-  virtual void OnGetMediaInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_MediaInfo* info, void* userdata)
+  void OnGetMediaInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_MediaInfo* info, void* userdata) override
   {
     if(NPT_FAILED(res) || info == NULL)
       CLog::Log(LOGERROR, "UPNP: CUPnPPlayer : OnGetMediaInfoResult failed");
   }
 
-  virtual void OnGetTransportInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_TransportInfo* info, void* userdata)
+  void OnGetTransportInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_TransportInfo* info, void* userdata) override
   {
     CSingleLock lock(m_section);
 
@@ -119,7 +116,7 @@ public:
     m_postime = 0;
   }
 
-  virtual void OnGetPositionInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_PositionInfo* info, void* userdata)
+  void OnGetPositionInfoResult(NPT_Result res, PLT_DeviceDataReference& device, PLT_PositionInfo* info, void* userdata) override
   {
     CSingleLock lock(m_section);
 
@@ -135,9 +132,7 @@ public:
   }
 
 
-  ~CUPnPPlayerController()
-  {
-  }
+  ~CUPnPPlayerController() override = default;
 
   PLT_MediaController*     m_control;
   PLT_Service *            m_transport;
@@ -175,10 +170,13 @@ CUPnPPlayer::CUPnPPlayer(IPlayerCallback& callback, const char* uuid)
   }
   else
     CLog::Log(LOGERROR, "UPNP: CUPnPPlayer couldn't find device as %s", uuid);
+
+  CServiceBroker::GetWinSystem()->RegisterRenderLoop(this);
 }
 
 CUPnPPlayer::~CUPnPPlayer()
 {
+  CServiceBroker::GetWinSystem()->UnregisterRenderLoop(this);
   CloseFile();
   CUPnP::UnregisterUserdata(m_delegate);
   delete m_delegate;
@@ -189,25 +187,10 @@ static NPT_Result WaitOnEvent(CEvent& event, XbmcThreads::EndTime& timeout, CGUI
   if(event.WaitMSec(0))
     return NPT_SUCCESS;
 
-  if(dialog == NULL) {
-    dialog = (CGUIDialogBusy*)g_windowManager.GetWindow(WINDOW_DIALOG_BUSY);
-    dialog->Show();
-  }
+  if (!CGUIDialogBusy::WaitOnEvent(event))
+    return NPT_FAILURE;
 
-  g_windowManager.ProcessRenderLoop(false);
-
-  do {
-    if(event.WaitMSec(100))
-      return NPT_SUCCESS;
-
-    g_windowManager.ProcessRenderLoop(false);
-
-    if(dialog->IsCanceled())
-      return NPT_FAILURE;
-
-  } while(!timeout.IsTimePast());
-
-  return NPT_FAILURE;
+  return NPT_SUCCESS;
 }
 
 int CUPnPPlayer::PlayFile(const CFileItem& file, const CPlayerOptions& options, CGUIDialogBusy*& dialog, XbmcThreads::EndTime& timeout)
@@ -226,7 +209,7 @@ int CUPnPPlayer::PlayFile(const CFileItem& file, const CPlayerOptions& options, 
   else if (item.IsMusicDb())
     thumb_loader = NPT_Reference<CThumbLoader>(new CMusicThumbLoader());
 
-  obj = BuildObject(item, path, false, thumb_loader, NULL, CUPnP::GetServer());
+  obj = BuildObject(item, path, false, thumb_loader, NULL, CUPnP::GetServer(), UPnPPlayer);
   if(obj.IsNull()) goto failed;
 
   NPT_CHECK_LABEL_SEVERE(PLT_Didl::ToDidl(*obj, "", tmp), failed_todidl);
@@ -380,7 +363,8 @@ bool CUPnPPlayer::OpenFile(const CFileItem& file, const CPlayerOptions& options)
 
   m_stopremote = true;
   m_started = true;
-  m_callback.OnPlayBackStarted();
+  m_callback.OnPlayBackStarted(file);
+  m_callback.OnAVStarted(file);
   NPT_CHECK_LABEL_SEVERE(m_control->GetPositionInfo(m_delegate->m_device
                                                   , m_delegate->m_instance
                                                   , m_delegate), failed);
@@ -390,6 +374,8 @@ bool CUPnPPlayer::OpenFile(const CFileItem& file, const CPlayerOptions& options)
 
   if(dialog)
     dialog->Close();
+
+  m_updateTimer.Set(0);
 
   return true;
 failed:
@@ -413,7 +399,7 @@ bool CUPnPPlayer::QueueNextFile(const CFileItem& file)
     thumb_loader = NPT_Reference<CThumbLoader>(new CMusicThumbLoader());
 
 
-  obj = BuildObject(item, path, 0, thumb_loader, NULL, CUPnP::GetServer());
+  obj = BuildObject(item, path, false, thumb_loader, NULL, CUPnP::GetServer(), UPnPPlayer);
   if(!obj.IsNull())
   {
     NPT_CHECK_LABEL_SEVERE(PLT_Didl::ToDidl(*obj, "", tmp), failed);
@@ -462,29 +448,34 @@ failed:
 void CUPnPPlayer::Pause()
 {
   if(IsPaused())
+  {
     NPT_CHECK_LABEL(m_control->Play(m_delegate->m_device
                                   , m_delegate->m_instance
                                   , "1"
                                   , m_delegate), failed);
+    CDataCacheCore::GetInstance().SetSpeed(1.0, 1.0);
+  }
   else
+  {
     NPT_CHECK_LABEL(m_control->Pause(m_delegate->m_device
                                    , m_delegate->m_instance
                                    , m_delegate), failed);
+    CDataCacheCore::GetInstance().SetSpeed(1.0, 0.0);
+  }
 
   return;
 failed:
   CLog::Log(LOGERROR, "UPNP: CUPnPPlayer::CloseFile - unable to pause/unpause playback");
-  return;
 }
 
-void CUPnPPlayer::SeekTime(__int64 ms)
+void CUPnPPlayer::SeekTime(int64_t ms)
 {
   NPT_CHECK_LABEL(m_control->Seek(m_delegate->m_device
                                 , m_delegate->m_instance
                                 , "REL_TIME", PLT_Didl::FormatTimeStamp((NPT_UInt32)(ms / 1000))
                                 , m_delegate), failed);
 
-  g_infoManager.SetDisplayAfterSeek();
+  CServiceBroker::GetGUI()->GetInfoManager().GetInfoProviders().GetPlayerInfoProvider().SetDisplayAfterSeek();
   return;
 failed:
   CLog::Log(LOGERROR, "UPNP: CUPnPPlayer::SeekTime - unable to seek playback");
@@ -527,7 +518,7 @@ void CUPnPPlayer::DoAudioWork()
       m_current_meta = (const char*)meta;
       CFileItemPtr item = GetFileItem(uri, meta);
       g_application.CurrentFileItem() = *item;
-      CApplicationMessenger::Get().SetCurrentItem(*item.get());
+      CApplicationMessenger::GetInstance().PostMsg(TMSG_UPDATE_CURRENT_ITEM, 0, -1, static_cast<void*>(new CFileItem(*item)));
     }
 
     NPT_CHECK_LABEL(m_delegate->m_transport->GetStateVariableValue("TransportState", data), failed);
@@ -572,7 +563,6 @@ void CUPnPPlayer::SetVolume(float volume)
   return;
 failed:
   CLog::Log(LOGERROR, "UPNP: CUPnPPlayer - unable to set volume");
-  return;
 }
 
 int64_t CUPnPPlayer::GetTime()
@@ -591,11 +581,6 @@ failed:
   return 0;
 };
 
-CStdString CUPnPPlayer::GetPlayingTitle()
-{
-  return "";
-};
-
 bool CUPnPPlayer::OnAction(const CAction &action)
 {
   switch (action.GetID())
@@ -603,14 +588,27 @@ bool CUPnPPlayer::OnAction(const CAction &action)
     case ACTION_STOP:
       if(IsPlaying())
       {
-        if(CGUIDialogYesNo::ShowAndGetInput(37022, 37023, 0, 0)) /* stop on remote system */
-          m_stopremote = true;
-        else
-          m_stopremote = false;
+        //stop on remote system
+        m_stopremote = HELPERS::ShowYesNoDialogText(CVariant{37022}, CVariant{37023}) == DialogResponse::YES;
+
         return false; /* let normal code handle the action */
       }
     default:
       return false;
+  }
+}
+
+void CUPnPPlayer::SetSpeed(float speed)
+{
+
+}
+
+void CUPnPPlayer::FrameMove()
+{
+  if (m_updateTimer.IsTimePast())
+  {
+    CDataCacheCore::GetInstance().SetPlayTimes(0, GetTime(), 0, GetTotalTime());
+    m_updateTimer.Set(500);
   }
 }
 

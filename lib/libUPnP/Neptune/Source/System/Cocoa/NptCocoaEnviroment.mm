@@ -13,13 +13,13 @@
 #include "NptConfig.h"
 #include "NptSystem.h"
 
-#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
-#include <Cocoa/Cocoa.h>
-#else
-#include <UIKit/UIKit.h> 
-#endif
+#import <Foundation/Foundation.h>
 
+#if !defined(TARGET_OS_IPHONE) || !TARGET_OS_IPHONE
 #import <SystemConfiguration/SystemConfiguration.h>
+#else
+#import <UIKit/UIKit.h>
+#endif
 
 NPT_Result
 NPT_GetSystemMachineName(NPT_String& name)

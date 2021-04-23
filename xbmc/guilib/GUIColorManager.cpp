@@ -1,36 +1,23 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "GUIColorManager.h"
-#include "filesystem/SpecialProtocol.h"
+
 #include "addons/Skin.h"
-#include "utils/log.h"
+#include "filesystem/SpecialProtocol.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/XBMCTinyXML.h"
-#include "utils/StringUtils.h"
+#include "utils/log.h"
 
-CGUIColorManager g_colorManager;
+#include <utility>
 
-CGUIColorManager::CGUIColorManager(void)
-{
-}
+CGUIColorManager::CGUIColorManager(void) = default;
 
 CGUIColorManager::~CGUIColorManager(void)
 {
@@ -43,7 +30,7 @@ void CGUIColorManager::Clear()
 }
 
 // load the color file in
-void CGUIColorManager::Load(const CStdString &colorFile)
+void CGUIColorManager::Load(const std::string &colorFile)
 {
   Clear();
 
@@ -53,8 +40,7 @@ void CGUIColorManager::Load(const CStdString &colorFile)
     LoadXML(xmlDoc);
 
   // first load the default color map if it exists
-  CStdString basePath = URIUtils::AddFileToFolder(g_SkinInfo->Path(), "colors");
-  CStdString path = URIUtils::AddFileToFolder(basePath, "defaults.xml");
+  std::string path = URIUtils::AddFileToFolder(g_SkinInfo->Path(), "colors", "defaults.xml");
 
   if (xmlDoc.LoadFile(CSpecialProtocol::TranslatePathConvertCase(path)))
     LoadXML(xmlDoc);
@@ -63,7 +49,7 @@ void CGUIColorManager::Load(const CStdString &colorFile)
   if (StringUtils::EqualsNoCase(colorFile, "SKINDEFAULT"))
     return; // nothing to do
 
-  path = URIUtils::AddFileToFolder(basePath, colorFile);
+  path = URIUtils::AddFileToFolder(g_SkinInfo->Path(), "colors", colorFile);
   if (!URIUtils::HasExtension(path))
     path += ".xml";
   CLog::Log(LOGINFO, "Loading colors from %s", path.c_str());
@@ -76,8 +62,8 @@ bool CGUIColorManager::LoadXML(CXBMCTinyXML &xmlDoc)
 {
   TiXmlElement* pRootElement = xmlDoc.RootElement();
 
-  CStdString strValue = pRootElement->Value();
-  if (strValue != CStdString("colors"))
+  std::string strValue = pRootElement->Value();
+  if (strValue != std::string("colors"))
   {
     CLog::Log(LOGERROR, "color file doesnt start with <colors>");
     return false;
@@ -89,10 +75,10 @@ bool CGUIColorManager::LoadXML(CXBMCTinyXML &xmlDoc)
   {
     if (color->FirstChild() && color->Attribute("name"))
     {
-      color_t value = 0xffffffff;
+      UTILS::Color value = 0xffffffff;
       sscanf(color->FirstChild()->Value(), "%x", (unsigned int*) &value);
-      CStdString name = color->Attribute("name");
-      iColor it = m_colors.find(name);
+      std::string name = color->Attribute("name");
+      const auto it = m_colors.find(name);
       if (it != m_colors.end())
         (*it).second = value;
       else
@@ -104,17 +90,17 @@ bool CGUIColorManager::LoadXML(CXBMCTinyXML &xmlDoc)
 }
 
 // lookup a color and return it's hex value
-color_t CGUIColorManager::GetColor(const CStdString &color) const
+UTILS::Color CGUIColorManager::GetColor(const std::string &color) const
 {
   // look in our color map
-  CStdString trimmed(color);
+  std::string trimmed(color);
   StringUtils::TrimLeft(trimmed, "= ");
-  icColor it = m_colors.find(trimmed);
+  const auto it = m_colors.find(trimmed);
   if (it != m_colors.end())
     return (*it).second;
 
   // try converting hex directly
-  color_t value = 0;
+  UTILS::Color value = 0;
   sscanf(trimmed.c_str(), "%x", &value);
   return value;
 }

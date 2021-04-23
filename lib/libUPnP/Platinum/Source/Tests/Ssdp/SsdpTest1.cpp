@@ -35,7 +35,6 @@
 /*----------------------------------------------------------------------
 |   includes
 +---------------------------------------------------------------------*/
-#include "NptUtils.h"
 #include "Neptune.h"
 #include "Platinum.h"
 
@@ -45,6 +44,9 @@
 int
 main(int, char**)
 {
+    // setup Neptune logging
+    NPT_LogManager::GetDefault().Configure("plist:.level=FINE;.handlers=ConsoleHandler;.ConsoleHandler.colors=off;.ConsoleHandler.filter=42");
+
     PLT_UPnP upnp;
     PLT_CtrlPointReference ctrl_point(new PLT_CtrlPoint());
     upnp.AddCtrlPoint(ctrl_point);

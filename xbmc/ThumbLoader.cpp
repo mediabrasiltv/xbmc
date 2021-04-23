@@ -1,29 +1,17 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "ThumbLoader.h"
-#include "filesystem/File.h"
+
 #include "FileItem.h"
 #include "TextureCache.h"
+#include "filesystem/File.h"
 
-using namespace std;
 using namespace XFILE;
 
 CThumbLoader::CThumbLoader() :
@@ -47,18 +35,18 @@ void CThumbLoader::OnLoaderFinish()
   m_textureDatabase->Close();
 }
 
-CStdString CThumbLoader::GetCachedImage(const CFileItem &item, const CStdString &type)
+std::string CThumbLoader::GetCachedImage(const CFileItem &item, const std::string &type)
 {
   if (!item.GetPath().empty() && m_textureDatabase->Open())
   {
-    CStdString image = m_textureDatabase->GetTextureForPath(item.GetPath(), type);
+    std::string image = m_textureDatabase->GetTextureForPath(item.GetPath(), type);
     m_textureDatabase->Close();
     return image;
   }
   return "";
 }
 
-void CThumbLoader::SetCachedImage(const CFileItem &item, const CStdString &type, const CStdString &image)
+void CThumbLoader::SetCachedImage(const CFileItem &item, const std::string &type, const std::string &image)
 {
   if (!item.GetPath().empty() && m_textureDatabase->Open())
   {
@@ -67,13 +55,9 @@ void CThumbLoader::SetCachedImage(const CFileItem &item, const CStdString &type,
   }
 }
 
-CProgramThumbLoader::CProgramThumbLoader()
-{
-}
+CProgramThumbLoader::CProgramThumbLoader() = default;
 
-CProgramThumbLoader::~CProgramThumbLoader()
-{
-}
+CProgramThumbLoader::~CProgramThumbLoader() = default;
 
 bool CProgramThumbLoader::LoadItem(CFileItem *pItem)
 {
@@ -99,7 +83,7 @@ bool CProgramThumbLoader::LoadItemLookup(CFileItem *pItem)
 bool CProgramThumbLoader::FillThumb(CFileItem &item)
 {
   // no need to do anything if we already have a thumb set
-  CStdString thumb = item.GetArt("thumb");
+  std::string thumb = item.GetArt("thumb");
 
   if (thumb.empty())
   { // see whether we have a cached image for this item
@@ -114,13 +98,13 @@ bool CProgramThumbLoader::FillThumb(CFileItem &item)
 
   if (!thumb.empty())
   {
-    CTextureCache::Get().BackgroundCacheImage(thumb);
+    CTextureCache::GetInstance().BackgroundCacheImage(thumb);
     item.SetArt("thumb", thumb);
   }
   return true;
 }
 
-CStdString CProgramThumbLoader::GetLocalThumb(const CFileItem &item)
+std::string CProgramThumbLoader::GetLocalThumb(const CFileItem &item)
 {
   if (item.IsAddonsPath())
     return "";
@@ -128,13 +112,13 @@ CStdString CProgramThumbLoader::GetLocalThumb(const CFileItem &item)
   // look for the thumb
   if (item.m_bIsFolder)
   {
-    CStdString folderThumb = item.GetFolderThumb();
+    std::string folderThumb = item.GetFolderThumb();
     if (CFile::Exists(folderThumb))
       return folderThumb;
   }
   else
   {
-    CStdString fileThumb(item.GetTBNFile());
+    std::string fileThumb(item.GetTBNFile());
     if (CFile::Exists(fileThumb))
       return fileThumb;
   }

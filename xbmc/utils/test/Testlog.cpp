@@ -1,56 +1,45 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
-#include "utils/log.h"
-#include "utils/RegExp.h"
+#include "CompileInfo.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
-
 #include "test/TestUtils.h"
+#include "utils/RegExp.h"
+#include "utils/StringUtils.h"
+#include "utils/log.h"
 
-#include "gtest/gtest.h"
+#include <stdlib.h>
+
+#include <gtest/gtest.h>
 
 class Testlog : public testing::Test
 {
 protected:
-  Testlog(){}
-  ~Testlog()
+  Testlog() = default;
+  ~Testlog() override
   {
-    /* Reset globals used by CLog after each test. */
-    g_log_globalsRef->m_file = NULL;
-    g_log_globalsRef->m_repeatCount = 0;
-    g_log_globalsRef->m_repeatLogLevel = -1;
-    g_log_globalsRef->m_logLevel = LOG_LEVEL_DEBUG;
+    CLog::Close();
   }
 };
 
 TEST_F(Testlog, Log)
 {
-  CStdString logfile, logstring;
+  std::string logfile, logstring;
   char buf[100];
-  unsigned int bytesread;
+  ssize_t bytesread;
   XFILE::CFile file;
   CRegExp regex;
 
-  logfile = CSpecialProtocol::TranslatePath("special://temp/") + "xbmc.log";
-  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/")));
+  std::string appName = CCompileInfo::GetAppName();
+  StringUtils::ToLower(appName);
+  logfile = CSpecialProtocol::TranslatePath("special://temp/") + appName + ".log";
+  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/").c_str()));
   EXPECT_TRUE(XFILE::CFile::Exists(logfile));
 
   CLog::Log(LOGDEBUG, "debug log message");
@@ -96,15 +85,17 @@ TEST_F(Testlog, Log)
 
 TEST_F(Testlog, MemDump)
 {
-  CStdString logfile, logstring;
+  std::string logfile, logstring;
   char buf[100];
   unsigned int bytesread;
   XFILE::CFile file;
   CRegExp regex;
   char refdata[] = "0123456789abcdefghijklmnopqrstuvwxyz";
 
-  logfile = CSpecialProtocol::TranslatePath("special://temp/") + "xbmc.log";
-  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/")));
+  std::string appName = CCompileInfo::GetAppName();
+  StringUtils::ToLower(appName);
+  logfile = CSpecialProtocol::TranslatePath("special://temp/") + appName + ".log";
+  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/").c_str()));
   EXPECT_TRUE(XFILE::CFile::Exists(logfile));
 
   CLog::MemDump(refdata, sizeof(refdata));
@@ -133,10 +124,12 @@ TEST_F(Testlog, MemDump)
 
 TEST_F(Testlog, SetLogLevel)
 {
-  CStdString logfile;
+  std::string logfile;
 
-  logfile = CSpecialProtocol::TranslatePath("special://temp/") + "xbmc.log";
-  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/")));
+  std::string appName = CCompileInfo::GetAppName();
+  StringUtils::ToLower(appName);
+  logfile = CSpecialProtocol::TranslatePath("special://temp/") + appName + ".log";
+  EXPECT_TRUE(CLog::Init(CSpecialProtocol::TranslatePath("special://temp/").c_str()));
   EXPECT_TRUE(XFILE::CFile::Exists(logfile));
 
   EXPECT_EQ(LOG_LEVEL_DEBUG, CLog::GetLogLevel());

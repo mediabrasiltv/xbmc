@@ -1,18 +1,18 @@
 include ../../Makefile.include
-DEPS= ../../Makefile.include Makefile 0001-HTTP-reset-expected-DL-UL-sizes-on-redirects.patch
+DEPS= ../../Makefile.include Makefile
 
 # lib name, version
 LIBNAME=curl
-VERSION=7.21.6
+VERSION=7.65.3
 SOURCE=$(LIBNAME)-$(VERSION)
 ARCHIVE=$(SOURCE).tar.bz2
 # configuration settings
 CONFIGURE=cp -f $(CONFIG_SUB) $(CONFIG_GUESS) .; \
-          ./configure --prefix=$(PREFIX) --without-libssh2 \
+          ./configure --prefix=$(PREFIX) --disable-shared --disable-ldap \
+          --without-libssh2 --disable-ntlm-wb --enable-ipv6 --without-librtmp \
+          --with-ca-fallback --with-ssl=$(PREFIX) --with-nghttp2=$(PREFIX)
 
 LIBDYLIB=$(PLATFORM)/lib/.libs/lib$(LIBNAME).a
-
-CLEAN_FILES=$(ARCHIVE) $(PLATFORM)
 
 all: .installed-$(PLATFORM)
 
@@ -22,7 +22,10 @@ $(TARBALLS_LOCATION)/$(ARCHIVE):
 $(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE) $(DEPS)
 	rm -rf $(PLATFORM)/*; mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
-	cd $(PLATFORM); patch -p1 < ../0001-HTTP-reset-expected-DL-UL-sizes-on-redirects.patch
+ifeq (darwin, $(findstring darwin, $(HOST)))
+	cd $(PLATFORM); sed -ie "s/elif defined(HAVE_CLOCK_GETTIME_MONOTONIC)/#elif defined(HAVE_CLOCK_GETTIME_MONOTONIC_NOPE)/" lib/timeval.c
+endif
+	cd $(PLATFORM); $(AUTORECONF) -vif
 	cd $(PLATFORM); $(CONFIGURE)
 
 $(LIBDYLIB): $(PLATFORM)
@@ -35,12 +38,6 @@ $(LIBDYLIB): $(PLATFORM)
 	# make sure to also install libcurl.pc, we need to do
 	# this because we are selectively installing only libcurl
 	$(MAKE) -C $(PLATFORM) install-pkgconfigDATA
-ifeq ($(OS),android)
-	rm -f $(PREFIX)/lib/libcurl.la $(PREFIX)/lib/libcurl.so $(PREFIX)/lib/libcurl.so.5
-	mv -f $(PREFIX)/lib/libcurl.so.5.2.0 $(PREFIX)/lib/libcurl.so
-	$(RPL) -e "libcurl.so.5" "libcurl.so\x00\x00" $(PREFIX)/lib/libcurl.so
-	-$(READELF) --dynamic $(PREFIX)/lib/libcurl.so | grep ibrary
-endif
 	touch $@
 
 clean:
@@ -49,4 +46,3 @@ clean:
 
 distclean::
 	rm -rf $(PLATFORM) .installed-$(PLATFORM)
-

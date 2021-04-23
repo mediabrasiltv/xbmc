@@ -1,35 +1,27 @@
 /*
- *      Copyright (C) 2005-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2005-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #include "PlayListB4S.h"
+
 #include "Util.h"
-#include "utils/XBMCTinyXML.h"
-#include "settings/AdvancedSettings.h"
-#include "music/tags/MusicInfoTag.h"
 #include "filesystem/File.h"
-#include "utils/log.h"
+#include "music/tags/MusicInfoTag.h"
+#include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
+#include "utils/XBMCTinyXML.h"
+#include "utils/XMLUtils.h"
+#include "utils/log.h"
+
+#include <iostream>
+#include <string>
 
 using namespace XFILE;
 using namespace PLAYLIST;
-using namespace std;
 
 /* ------------------------ example b4s playlist file ---------------------------------
  <?xml version="1.0" encoding='UTF-8' standalone="yes"?>
@@ -47,14 +39,12 @@ using namespace std;
   </playlist>
  </WinampXML>
 ------------------------ end of example b4s playlist file ---------------------------------*/
-CPlayListB4S::CPlayListB4S(void)
-{}
+CPlayListB4S::CPlayListB4S(void) = default;
 
-CPlayListB4S::~CPlayListB4S(void)
-{}
+CPlayListB4S::~CPlayListB4S(void) = default;
 
 
-bool CPlayListB4S::LoadData(istream& stream)
+bool CPlayListB4S::LoadData(std::istream& stream)
 {
   CXBMCTinyXML xmlDoc;
 
@@ -71,14 +61,14 @@ bool CPlayListB4S::LoadData(istream& stream)
 
   TiXmlElement* pPlayListElement = pRootElement->FirstChildElement("playlist");
   if (!pPlayListElement ) return false;
-  m_strPlayListName = pPlayListElement->Attribute("label");
+  m_strPlayListName = XMLUtils::GetAttribute(pPlayListElement, "label");
 
   TiXmlElement* pEntryElement = pPlayListElement->FirstChildElement("entry");
 
   if (!pEntryElement) return false;
   while (pEntryElement)
   {
-    CStdString strFileName = pEntryElement->Attribute("Playstring");
+    std::string strFileName = XMLUtils::GetAttribute(pEntryElement, "Playstring");
     size_t iColon = strFileName.find(":");
     if (iColon != std::string::npos)
     {
@@ -96,7 +86,7 @@ bool CPlayListB4S::LoadData(istream& stream)
       }
       if (pNodeInfo)
       {
-        CStdString strInfo = pNodeInfo->FirstChild()->Value();
+        std::string strInfo = pNodeInfo->FirstChild()->Value();
         strFileName = URIUtils::SubstitutePath(strFileName);
         CUtil::GetQualifiedFilename(m_strBasePath, strFileName);
         CFileItemPtr newItem(new CFileItem(strInfo));
@@ -110,10 +100,10 @@ bool CPlayListB4S::LoadData(istream& stream)
   return true;
 }
 
-void CPlayListB4S::Save(const CStdString& strFileName) const
+void CPlayListB4S::Save(const std::string& strFileName) const
 {
   if (!m_vecItems.size()) return ;
-  CStdString strPlaylist = strFileName;
+  std::string strPlaylist = strFileName;
   strPlaylist = CUtil::MakeLegalPath(strPlaylist);
   CFile file;
   if (!file.OpenForWrite(strPlaylist, true))
@@ -121,10 +111,10 @@ void CPlayListB4S::Save(const CStdString& strFileName) const
     CLog::Log(LOGERROR, "Could not save B4S playlist: [%s]", strPlaylist.c_str());
     return ;
   }
-  CStdString write;
+  std::string write;
   write += StringUtils::Format("<?xml version=%c1.0%c encoding='UTF-8' standalone=%cyes%c?>\n", 34, 34, 34, 34);
   write += StringUtils::Format("<WinampXML>\n");
-  write += StringUtils::Format("  <playlist num_entries=%c%i%c label=%c%s%c>\n", 34, m_vecItems.size(), 34, 34, m_strPlayListName.c_str(), 34);
+  write += StringUtils::Format("  <playlist num_entries=\"{0}\" label=\"{1}\">\n", m_vecItems.size(),m_strPlayListName.c_str());
   for (int i = 0; i < (int)m_vecItems.size(); ++i)
   {
     const CFileItemPtr item = m_vecItems[i];

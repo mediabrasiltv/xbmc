@@ -1,21 +1,9 @@
 /*
- *      Copyright (C) 2010-2013 Team XBMC
- *      http://xbmc.org
+ *  Copyright (C) 2010-2018 Team Kodi
+ *  This file is part of Kodi - https://kodi.tv
  *
- *  This Program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2, or (at your option)
- *  any later version.
- *
- *  This Program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, see
- *  <http://www.gnu.org/licenses/>.
- *
+ *  SPDX-License-Identifier: GPL-2.0-or-later
+ *  See LICENSES/README.md for more information.
  */
 
 #define AC3_ENCODE_BITRATE 640000
@@ -23,36 +11,27 @@
 
 #include "cores/AudioEngine/Encoders/AEEncoderFFmpeg.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
+#include "ServiceBroker.h"
 #include "utils/log.h"
-#include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
+#include "settings/SettingsComponent.h"
 #include <string.h>
+#include <cassert>
 
 CAEEncoderFFmpeg::CAEEncoderFFmpeg():
-  m_BitRate       (0    ),
   m_CodecCtx      (NULL ),
-  m_SwrCtx        (NULL ),
-  m_BufferSize    (0    ),
-  m_OutputSize    (0    ),
-  m_OutputRatio   (0.0  ),
-  m_SampleRateMul (0.0  ),
-  m_NeededFrames  (0    ),
-  m_NeedConversion(false),
-  m_ResampBuffer  (NULL ),
-  m_ResampBufferSize(0  )
+  m_SwrCtx        (NULL )
 {
 }
 
 CAEEncoderFFmpeg::~CAEEncoderFFmpeg()
 {
   Reset();
-  m_dllAvUtil.av_freep(&m_CodecCtx);
-  m_dllAvUtil.av_freep(&m_ResampBuffer);
-  if (m_SwrCtx)
-    m_dllSwResample.swr_free(&m_SwrCtx);
+  swr_free(&m_SwrCtx);
+  avcodec_free_context(&m_CodecCtx);
 }
 
-bool CAEEncoderFFmpeg::IsCompatible(AEAudioFormat format)
+bool CAEEncoderFFmpeg::IsCompatible(const AEAudioFormat& format)
 {
   if (!m_CodecCtx)
     return false;
@@ -102,44 +81,29 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
 {
   Reset();
 
-  if (!m_dllAvUtil.Load() || !m_dllAvCodec.Load() || !m_dllSwResample.Load())
-    return false;
-
-  m_dllAvCodec.avcodec_register_all();
-
-  bool ac3 = CSettings::Get().GetBool("audiooutput.ac3passthrough");
+  bool ac3 = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_AUDIOOUTPUT_AC3PASSTHROUGH);
 
   AVCodec *codec = NULL;
-#if 0
-  /* the DCA encoder is currently useless for transcode, it creates a 196 kHz DTS-HD like mongrel which is useless for SPDIF */
-  bool dts = CSettings::Get().GetBool("audiooutput.dtspassthrough");
-  if (dts && (!ac3 || g_advancedSettings.m_audioTranscodeTo.Equals("dts")))
-  {
-    m_CodecName = "DTS";
-    m_CodecID   = AV_CODEC_ID_DTS;
-    m_PackFunc  = &CAEPackIEC61937::PackDTS_1024;
-    m_BitRate   = DTS_ENCODE_BITRATE;
-    codec = m_dllAvCodec.avcodec_find_encoder(m_CodecID);
-  }
-#endif
 
   /* fallback to ac3 if we support it, we might not have DTS support */
   if (!codec && ac3)
   {
     m_CodecName = "AC3";
-    m_CodecID   = AV_CODEC_ID_AC3;
-    m_PackFunc  = &CAEPackIEC61937::PackAC3;
-    m_BitRate   = AC3_ENCODE_BITRATE;
-    codec = m_dllAvCodec.avcodec_find_encoder(m_CodecID);
+    m_CodecID = AV_CODEC_ID_AC3;
+    m_BitRate = AC3_ENCODE_BITRATE;
+    codec = avcodec_find_encoder(m_CodecID);
   }
 
   /* check we got the codec */
   if (!codec)
     return false;
 
-  m_CodecCtx                 = m_dllAvCodec.avcodec_alloc_context3(codec);
-  m_CodecCtx->bit_rate       = m_BitRate;
-  m_CodecCtx->sample_rate    = format.m_sampleRate;
+  m_CodecCtx = avcodec_alloc_context3(codec);
+  if (!m_CodecCtx)
+    return false;
+
+  m_CodecCtx->bit_rate = m_BitRate;
+  m_CodecCtx->sample_rate = format.m_sampleRate;
   m_CodecCtx->channel_layout = AV_CH_LAYOUT_5POINT1_BACK;
 
   /* select a suitable data format */
@@ -147,9 +111,9 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
   {
     bool hasFloat  = false;
     bool hasDouble = false;
-    bool hasS32    = false;
-    bool hasS16    = false;
-    bool hasU8     = false;
+    bool hasS32 = false;
+    bool hasS16 = false;
+    bool hasU8 = false;
     bool hasFloatP = false;
     bool hasUnknownFormat = false;
 
@@ -176,43 +140,44 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
     if (hasFloat)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_FLT;
-      format.m_dataFormat    = AE_FMT_FLOAT;
+      format.m_dataFormat = AE_FMT_FLOAT;
     }
     else if (hasFloatP)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-      format.m_dataFormat    = AE_FMT_FLOATP;
+      format.m_dataFormat = AE_FMT_FLOATP;
     }
     else if (hasDouble)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_DBL;
-      format.m_dataFormat    = AE_FMT_DOUBLE;
+      format.m_dataFormat = AE_FMT_DOUBLE;
     }
     else if (hasS32)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_S32;
-      format.m_dataFormat    = AE_FMT_S32NE;
+      format.m_dataFormat = AE_FMT_S32NE;
     }
     else if (hasS16)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_S16;
-      format.m_dataFormat    = AE_FMT_S16NE;
+      format.m_dataFormat = AE_FMT_S16NE;
     }
     else if (hasU8)
     {
       m_CodecCtx->sample_fmt = AV_SAMPLE_FMT_U8;
-      format.m_dataFormat    = AE_FMT_U8;
+      format.m_dataFormat = AE_FMT_U8;
     }
     else if (hasUnknownFormat)
     {
       m_CodecCtx->sample_fmt = codec->sample_fmts[0];
-      format.m_dataFormat    = AE_FMT_FLOAT;
-      m_NeedConversion       = true;
+      format.m_dataFormat = AE_FMT_FLOAT;
+      m_NeedConversion = true;
       CLog::Log(LOGNOTICE, "CAEEncoderFFmpeg::Initialize - Unknown audio format, it will be resampled.");
     }
     else
     {
       CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Initialize - Unable to find a suitable data format for the codec (%s)", m_CodecName.c_str());
+      avcodec_free_context(&m_CodecCtx);
       return false;
     }
   }
@@ -220,32 +185,32 @@ bool CAEEncoderFFmpeg::Initialize(AEAudioFormat &format, bool allow_planar_input
   m_CodecCtx->channels = BuildChannelLayout(m_CodecCtx->channel_layout, m_Layout);
 
   /* open the codec */
-  if (m_dllAvCodec.avcodec_open2(m_CodecCtx, codec, NULL))
+  if (avcodec_open2(m_CodecCtx, codec, NULL))
   {
-    m_dllAvUtil.av_freep(&m_CodecCtx);
+    avcodec_free_context(&m_CodecCtx);
     return false;
   }
 
-  format.m_frames        = m_CodecCtx->frame_size;
-  format.m_frameSamples  = m_CodecCtx->frame_size * m_CodecCtx->channels;
-  format.m_frameSize     = m_CodecCtx->channels * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
+  format.m_frames = m_CodecCtx->frame_size;
+  format.m_frameSize = m_CodecCtx->channels * (CAEUtil::DataFormatToBits(format.m_dataFormat) >> 3);
   format.m_channelLayout = m_Layout;
 
   m_CurrentFormat = format;
-  m_NeededFrames  = format.m_frames;
-  m_OutputSize    = m_PackFunc(NULL, 0, m_Buffer);
+  m_NeededFrames = format.m_frames;
   m_OutputRatio   = (double)m_NeededFrames / m_OutputSize;
   m_SampleRateMul = 1.0 / (double)m_CodecCtx->sample_rate;
 
   if (m_NeedConversion)
   {
-    m_SwrCtx = m_dllSwResample.swr_alloc_set_opts(NULL,
+    m_SwrCtx = swr_alloc_set_opts(NULL,
                       m_CodecCtx->channel_layout, m_CodecCtx->sample_fmt, m_CodecCtx->sample_rate,
                       m_CodecCtx->channel_layout, AV_SAMPLE_FMT_FLT, m_CodecCtx->sample_rate,
                       0, NULL);
-    if (!m_SwrCtx || m_dllSwResample.swr_init(m_SwrCtx) < 0)
+    if (!m_SwrCtx || swr_init(m_SwrCtx) < 0)
     {
       CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Initialize - Failed to initialise resampler.");
+      swr_free(&m_SwrCtx);
+      avcodec_free_context(&m_CodecCtx);
       return false;
     }
   }
@@ -273,95 +238,6 @@ unsigned int CAEEncoderFFmpeg::GetFrames()
   return m_NeededFrames;
 }
 
-int CAEEncoderFFmpeg::Encode(float *data, unsigned int frames)
-{
-  int got_output;
-  AVFrame *frame;
-  const uint8_t *input = (const uint8_t*) data;
-
-  if (!m_CodecCtx || frames < m_NeededFrames)
-    return 0;
-
-  /* size of the buffer sent to the encoder: either from the input data or after
-   * conversion, in all cases it is in the m_CodecCtx->sample_fmt format */
-  int buf_size = m_dllAvUtil.av_samples_get_buffer_size(NULL, m_CodecCtx->channels, frames, m_CodecCtx->sample_fmt, 0);
-  assert(buf_size>0);
-
-  /* allocate the input frame
-   * sadly, we have to alloc/dealloc it everytime since we have no guarantee the
-   * data argument will be constant over iterated calls and the frame needs to
-   * setup pointers inside data */
-  frame = m_dllAvCodec.avcodec_alloc_frame();
-  if (!frame)
-    return 0;
-
-  frame->nb_samples     = m_CodecCtx->frame_size;
-  frame->format         = m_CodecCtx->sample_fmt;
-  frame->channel_layout = m_CodecCtx->channel_layout;
-
-  if (m_NeedConversion)
-  {
-    if (!m_ResampBuffer || buf_size > m_ResampBufferSize)
-    {
-      m_ResampBuffer = (uint8_t*)m_dllAvUtil.av_realloc(m_ResampBuffer, buf_size);
-      if (!m_ResampBuffer)
-      {
-        CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Encode - Failed to allocate %i bytes buffer for resampling", buf_size);
-        m_dllAvCodec.avcodec_free_frame(&frame);
-        return 0;
-      }
-      m_ResampBufferSize = buf_size;
-    }
-
-    m_dllAvCodec.avcodec_fill_audio_frame(frame, m_CodecCtx->channels, m_CodecCtx->sample_fmt, m_ResampBuffer, buf_size, 0);
-
-    /* important note: the '&input' here works because we convert from a packed
-     * format (ie, interleaved). If it were to be used to convert from planar
-     * formats (ie, non-interleaved, which is not currently supported by AE),
-     * we would need to adapt it or it would segfault. */
-    if (m_dllSwResample.swr_convert(m_SwrCtx, frame->extended_data, frames, &input, frames) < 0)
-    {
-      CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Encode - Resampling failed");
-      m_dllAvCodec.avcodec_free_frame(&frame);
-      return 0;
-    }
-  }
-  else
-    m_dllAvCodec.avcodec_fill_audio_frame(frame, m_CodecCtx->channels, m_CodecCtx->sample_fmt,
-                    input, buf_size, 0);
-
-  /* initialize the output packet */
-  m_dllAvCodec.av_init_packet(&m_Pkt);
-  m_Pkt.size      = sizeof(m_Buffer) - IEC61937_DATA_OFFSET;
-  m_Pkt.data      = m_Buffer + IEC61937_DATA_OFFSET;
-
-  /* encode it */
-  int ret = m_dllAvCodec.avcodec_encode_audio2(m_CodecCtx, &m_Pkt, frame, &got_output);
-
-  /* free temporary data */
-  m_dllAvCodec.avcodec_free_frame(&frame);
-
-  if (ret < 0 || !got_output)
-  {
-    CLog::Log(LOGERROR, "CAEEncoderFFmpeg::Encode - Encoding failed");
-    return 0;
-  }
-
-  /* pack it into an IEC958 frame */
-  m_BufferSize = m_PackFunc(NULL, m_Pkt.size, m_Buffer);
-  if (m_BufferSize != m_OutputSize)
-  {
-    m_OutputSize  = m_BufferSize;
-    m_OutputRatio = (double)m_NeededFrames / m_OutputSize;
-  }
-
-  /* free the packet */
-  m_dllAvCodec.av_free_packet(&m_Pkt);
-
-  /* return the number of frames used */
-  return m_NeededFrames;
-}
-
 int CAEEncoderFFmpeg::Encode(uint8_t *in, int in_size, uint8_t *out, int out_size)
 {
   int got_output;
@@ -374,27 +250,27 @@ int CAEEncoderFFmpeg::Encode(uint8_t *in, int in_size, uint8_t *out, int out_siz
    * sadly, we have to alloc/dealloc it everytime since we have no guarantee the
    * data argument will be constant over iterated calls and the frame needs to
    * setup pointers inside data */
-  frame = m_dllAvCodec.avcodec_alloc_frame();
+  frame = av_frame_alloc();
   if (!frame)
     return 0;
 
-  frame->nb_samples     = m_CodecCtx->frame_size;
-  frame->format         = m_CodecCtx->sample_fmt;
+  frame->nb_samples = m_CodecCtx->frame_size;
+  frame->format = m_CodecCtx->sample_fmt;
   frame->channel_layout = m_CodecCtx->channel_layout;
 
-  m_dllAvCodec.avcodec_fill_audio_frame(frame, m_CodecCtx->channels, m_CodecCtx->sample_fmt,
+  avcodec_fill_audio_frame(frame, m_CodecCtx->channels, m_CodecCtx->sample_fmt,
                     in, in_size, 0);
 
   /* initialize the output packet */
-  m_dllAvCodec.av_init_packet(&m_Pkt);
-  m_Pkt.size      = out_size - IEC61937_DATA_OFFSET;
-  m_Pkt.data      = out + IEC61937_DATA_OFFSET;
+  av_init_packet(&m_Pkt);
+  m_Pkt.size = out_size;
+  m_Pkt.data = out;
 
   /* encode it */
-  int ret = m_dllAvCodec.avcodec_encode_audio2(m_CodecCtx, &m_Pkt, frame, &got_output);
+  int ret = avcodec_encode_audio2(m_CodecCtx, &m_Pkt, frame, &got_output);
 
   /* free temporary data */
-  m_dllAvCodec.avcodec_free_frame(&frame);
+  av_frame_free(&frame);
 
   if (ret < 0 || !got_output)
   {
@@ -402,14 +278,13 @@ int CAEEncoderFFmpeg::Encode(uint8_t *in, int in_size, uint8_t *out, int out_siz
     return 0;
   }
 
-  /* pack it into an IEC958 frame */
-  m_PackFunc(NULL, m_Pkt.size, out);
+  int size = m_Pkt.size;
 
   /* free the packet */
-  m_dllAvCodec.av_free_packet(&m_Pkt);
+  av_packet_unref(&m_Pkt);
 
   /* return the number of frames used */
-  return m_NeededFrames;
+  return size;
 }
 
 
@@ -417,7 +292,7 @@ int CAEEncoderFFmpeg::GetData(uint8_t **data)
 {
   int size;
   *data = m_Buffer;
-  size  = m_BufferSize;
+  size = m_BufferSize;
   m_BufferSize = 0;
   return size;
 }
