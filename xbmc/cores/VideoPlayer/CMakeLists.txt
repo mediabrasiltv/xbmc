@@ -36,18 +36,9 @@ set(HEADERS AudioSinkAE.h
             VideoPlayerVideo.h
             VideoReferenceClock.h
             Interface/StreamInfo.h
-            Interface/Addon/DemuxPacket.h
-            Interface/Addon/DemuxCrypto.h
-            Interface/Addon/InputStreamConstants.h
-            Interface/Addon/TimingConstants.h
-            nvapi.h
-            nvapi_lite_common.h
-            nvapi_lite_d3dext.h
-            nvapi_lite_salend.h
-            nvapi_lite_salstart.h
-	          nvapi_lite_sli.h
-	          nvapi_lite_stereo.h
-            nvapi_lite_surround.h
-	          amd_ags.h)
+            Interface/DemuxPacket.h
+            Interface/DemuxCrypto.h
+            Interface/InputStreamConstants.h
+            Interface/TimingConstants.h)
 
 core_add_library(VideoPlayer)
