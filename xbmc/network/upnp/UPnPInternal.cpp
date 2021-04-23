@@ -24,6 +24,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/ContentUtils.h"
 #include "utils/LangCodeExpander.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -354,25 +355,37 @@ BuildObject(CFileItem&                    item,
             CUPnPServer*                  upnp_server /* = NULL */,
             UPnPService                   upnp_service /* = UPnPServiceNone */)
 {
-    PLT_MediaItemResource resource;
-    PLT_MediaObject*      object = NULL;
-    std::string thumb;
+  static Logger logger = CServiceBroker::GetLogging().GetLogger("UPNP::BuildObject");
 
-    CLog::Log(LOGDEBUG, "UPnP: Building didl for object '%s'", item.GetPath().c_str());
+  PLT_MediaItemResource resource;
+  PLT_MediaObject* object = NULL;
+  std::string thumb;
 
-    EClientQuirks quirks = GetClientQuirks(context);
+  logger->debug("Building didl for object '{}'", item.GetPath());
 
-    // get list of ip addresses
-    NPT_List<NPT_IpAddress> ips;
-    NPT_HttpUrl rooturi;
-    NPT_CHECK_LABEL(PLT_UPnPMessageHelper::GetIPAddresses(ips), failure);
+  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  if (!settingsComponent)
+    return nullptr;
 
-    // if we're passed an interface where we received the request from
-    // move the ip to the top
-    if (context && context->GetLocalAddress().GetIpAddress().ToString() != "0.0.0.0") {
-        rooturi = NPT_HttpUrl(context->GetLocalAddress().GetIpAddress().ToString(), context->GetLocalAddress().GetPort(), "/");
-        ips.Remove(context->GetLocalAddress().GetIpAddress());
-        ips.Insert(ips.GetFirstItem(), context->GetLocalAddress().GetIpAddress());
+  auto settings = settingsComponent->GetSettings();
+  if (!settings)
+    return nullptr;
+
+  EClientQuirks quirks = GetClientQuirks(context);
+
+  // get list of ip addresses
+  NPT_List<NPT_IpAddress> ips;
+  NPT_HttpUrl rooturi;
+  NPT_CHECK_LABEL(PLT_UPnPMessageHelper::GetIPAddresses(ips), failure);
+
+  // if we're passed an interface where we received the request from
+  // move the ip to the top
+  if (context && context->GetLocalAddress().GetIpAddress().ToString() != "0.0.0.0")
+  {
+    rooturi = NPT_HttpUrl(context->GetLocalAddress().GetIpAddress().ToString(),
+                          context->GetLocalAddress().GetPort(), "/");
+    ips.Remove(context->GetLocalAddress().GetIpAddress());
+    ips.Insert(ips.GetFirstItem(), context->GetLocalAddress().GetIpAddress());
     } else if(upnp_server) {
         rooturi = NPT_HttpUrl("localhost", upnp_server->GetPort(), "/");
     }
@@ -508,7 +521,11 @@ BuildObject(CFileItem&                    item,
                   break;
                 case VIDEODATABASEDIRECTORY::NODE_TYPE_ACTOR:
                   container->m_ObjectClass.type += ".person.videoArtist";
-                  container->m_Creator = StringUtils::Join(tag.m_artist, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoItemSeparator).c_str();
+                  container->m_Creator =
+                      StringUtils::Join(
+                          tag.m_artist,
+                          settingsComponent->GetAdvancedSettings()->m_videoItemSeparator)
+                          .c_str();
                   container->m_Title   = tag.m_strTitle.c_str();
                   break;
                 case VIDEODATABASEDIRECTORY::NODE_TYPE_SEASONS:
@@ -575,8 +592,10 @@ BuildObject(CFileItem&                    item,
         if (!thumb_loader.IsNull())
             thumb_loader->LoadItem(&item);
 
-        // finally apply the found artwork
-        thumb = item.GetArt("thumb");
+        // we have to decide the best art type to serve to the client - use ContentUtils
+        // to get it since it depends on the mediatype of the item being served
+        thumb = ContentUtils::GetPreferredArtImage(item);
+
         if (!thumb.empty()) {
             PLT_AlbumArtInfo art;
             art.uri = upnp_server->BuildSafeResourceUri(
@@ -612,8 +631,8 @@ BuildObject(CFileItem&                    item,
     // we are being called by a UPnP player or renderer or the user has chosen
     // to look for external subtitles
     if (upnp_server != NULL && item.IsVideo() &&
-       (upnp_service == UPnPPlayer || upnp_service == UPnPRenderer ||
-        CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_SERVICES_UPNPLOOKFOREXTERNALSUBTITLES)))
+        (upnp_service == UPnPPlayer || upnp_service == UPnPRenderer ||
+         settings->GetBool(CSettings::SETTING_SERVICES_UPNPLOOKFOREXTERNALSUBTITLES)))
     {
         // find any available external subtitles
         std::vector<std::string> filenames;
@@ -642,20 +661,28 @@ BuildObject(CFileItem&                    item,
         }
         else if (!subtitles.empty())
         {
-            /* trying to find subtitle with prefered language settings */
-            std::string preferredLanguage = (CServiceBroker::GetSettingsComponent()->GetSettings()->GetSetting("locale.subtitlelanguage"))->ToString();
-            std::string preferredLanguageCode;
-            g_LangCodeExpander.ConvertToISO6392B(preferredLanguage, preferredLanguageCode);
+          std::string preferredLanguage{"en"};
 
-            for (unsigned int i = 0; i < subtitles.size(); i++)
+          /* trying to find subtitle with prefered language settings */
+          auto setting = settings->GetSetting("locale.subtitlelanguage");
+          if (!setting)
+            CLog::Log(LOGERROR, "Failed to load setting for: {}", "locale.subtitlelanguage");
+          else
+            preferredLanguage = setting->ToString();
+
+          std::string preferredLanguageCode;
+          g_LangCodeExpander.ConvertToISO6392B(preferredLanguage, preferredLanguageCode);
+
+          for (unsigned int i = 0; i < subtitles.size(); i++)
+          {
+            ExternalStreamInfo info =
+                CUtil::GetExternalStreamDetailsFromFilename(file_path.GetChars(), subtitles[i]);
+
+            if (preferredLanguageCode == info.language)
             {
-                ExternalStreamInfo info = CUtil::GetExternalStreamDetailsFromFilename(file_path.GetChars(), subtitles[i]);
-
-                if (preferredLanguageCode == info.language)
-                {
-                    subtitlePath = subtitles[i];
-                    break;
-                }
+              subtitlePath = subtitles[i];
+              break;
+            }
             }
             /* if not found subtitle with prefered language, get the first one */
             if (subtitlePath.empty())
@@ -953,9 +980,9 @@ CFileItemPtr BuildObject(PLT_MediaObject* entry,
 
   // look for date?
   if(entry->m_Description.date.GetLength()) {
-    SYSTEMTIME time = {};
-    sscanf(entry->m_Description.date, "%hu-%hu-%huT%hu:%hu:%hu",
-           &time.wYear, &time.wMonth, &time.wDay, &time.wHour, &time.wMinute, &time.wSecond);
+    KODI::TIME::SystemTime time = {};
+    sscanf(entry->m_Description.date, "%hu-%hu-%huT%hu:%hu:%hu", &time.year, &time.month, &time.day,
+           &time.hour, &time.minute, &time.second);
     pItem->m_dateTime = time;
   }
 
@@ -1036,6 +1063,8 @@ struct ResourcePrioritySort
 
 bool GetResource(const PLT_MediaObject* entry, CFileItem& item)
 {
+  static Logger logger = CServiceBroker::GetLogging().GetLogger("CUPnPDirectory::GetResource");
+
   PLT_MediaItemResource resource;
 
   // store original path so we remember it
@@ -1061,15 +1090,13 @@ bool GetResource(const PLT_MediaObject* entry, CFileItem& item)
 
   // look for content type in protocol info
   if (resource.m_ProtocolInfo.IsValid()) {
-    CLog::Log(LOGDEBUG, "CUPnPDirectory::GetResource - resource protocol info '%s'",
-              (const char*)(resource.m_ProtocolInfo.ToString()));
+    logger->debug("resource protocol info '{}'", (const char*)(resource.m_ProtocolInfo.ToString()));
 
     if (resource.m_ProtocolInfo.GetContentType().Compare("application/octet-stream") != 0) {
       item.SetMimeType((const char*)resource.m_ProtocolInfo.GetContentType());
     }
   } else {
-    CLog::Log(LOGERROR, "CUPnPDirectory::GetResource - invalid protocol info '%s'",
-              (const char*)(resource.m_ProtocolInfo.ToString()));
+    logger->error("invalid protocol info '{}'", (const char*)(resource.m_ProtocolInfo.ToString()));
   }
 
   // look for subtitles

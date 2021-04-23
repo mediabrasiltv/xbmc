@@ -25,7 +25,6 @@ static std::string s_className = std::string(CCompileInfo::GetClass()) + "/XBMCM
 
 CJNIXBMCMediaSession::CJNIXBMCMediaSession()
   : CJNIBase(s_className)
-  , m_isActive(false)
 {
   m_object = new_object(CJNIContext::getClassLoader().loadClass(GetDotClassName(s_className)));
   m_object.setGlobal();
@@ -157,7 +156,7 @@ void CJNIXBMCMediaSession::OnSeekRequested(int64_t pos)
   g_application.SeekTime(pos / 1000.0);
 }
 
-bool CJNIXBMCMediaSession::OnMediaButtonEvent(CJNIIntent intent)
+bool CJNIXBMCMediaSession::OnMediaButtonEvent(const CJNIIntent& intent)
 {
   if (CXBMCApp::HasFocus())
   {

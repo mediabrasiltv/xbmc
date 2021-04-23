@@ -14,7 +14,10 @@ case $build in
   amd64-*-freebsd*)
      AC_SUBST(NATIVE_ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_FREEBSD")
      ;;
-  *86*-apple-darwin*)
+  arm-apple-darwin*)
+     AC_SUBST(NATIVE_ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_OSX")
+     ;;
+  x86_64-apple-darwin*)
      AC_SUBST(NATIVE_ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_OSX")
      ;;
   powerpc-*-linux-gnu*|powerpc-*-linux-uclibc*)
@@ -23,7 +26,7 @@ case $build in
   powerpc64-*-linux-gnu*|powerpc64-*-linux-uclibc*)
      AC_SUBST(NATIVE_ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_LINUX -D_POWERPC64")
      ;;
-  arm*-*-linux-gnu*|arm*-*-linux-uclibc*)
+  arm*-*-linux-gnu*|arm*-*-linux-uclibc*|aarch64*-*-linux-gnu*|aarch64*-*-linux-uclibc*)
      AC_SUBST(NATIVE_ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_LINUX")
      ;;
   *)
@@ -45,13 +48,14 @@ case $host in
   amd64-*-freebsd*)
      AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_FREEBSD")
      ;;
-  arm-apple-darwin*)
-     AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_EMBEDDED")
+  aarch64-apple-darwin*)
+     if test "$target_platform" = "macosx" ; then
+        AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_OSX")
+     else
+        AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_EMBEDDED")
+     fi
      ;;
-  *86*-apple-darwin*)
-     AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_OSX")
-     ;;
-  powerpc-apple-darwin*)
+  x86_64-apple-darwin*)
      AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_DARWIN -DTARGET_DARWIN_OSX")
      ;;
   powerpc-*-linux-gnu*|powerpc-*-linux-uclibc*)
@@ -77,7 +81,4 @@ if test "$target_platform" = "target_android" ; then
   AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_LINUX -DTARGET_ANDROID")
 fi
 
-if test "$target_platform" = "target_raspberry_pi" ; then
-  AC_SUBST(ARCH_DEFINES, "-DTARGET_POSIX -DTARGET_LINUX -D_ARMEL -DTARGET_RASPBERRY_PI")
-fi
 ])

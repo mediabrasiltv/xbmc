@@ -12,7 +12,6 @@
 #include "URL.h"
 #include "addons/AddonManager.h"
 #include "addons/VFSEntry.h"
-#include "addons/binary-addons/BinaryAddonBase.h"
 #include "dialogs/GUIDialogFileBrowser.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIEditControl.h"
@@ -82,7 +81,7 @@ bool CGUIDialogNetworkSetup::OnMessage(CGUIMessage& message)
   return CGUIDialogSettingsManualBase::OnMessage(message);
 }
 
-void CGUIDialogNetworkSetup::OnSettingChanged(std::shared_ptr<const CSetting> setting)
+void CGUIDialogNetworkSetup::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -111,7 +110,7 @@ void CGUIDialogNetworkSetup::OnSettingChanged(std::shared_ptr<const CSetting> se
     m_password = std::static_pointer_cast<const CSettingString>(setting)->GetValue();
 }
 
-void CGUIDialogNetworkSetup::OnSettingAction(std::shared_ptr<const CSetting> setting)
+void CGUIDialogNetworkSetup::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -196,7 +195,8 @@ void CGUIDialogNetworkSetup::InitializeSettings()
   // Add our protocols
   TranslatableIntegerSettingOptions labels;
   for (size_t idx = 0; idx < m_protocols.size(); ++idx)
-    labels.push_back(std::make_pair(m_protocols[idx].label, idx));
+    labels.push_back(
+        TranslatableIntegerSettingOption(m_protocols[idx].label, idx, m_protocols[idx].addonId));
 
   AddSpinner(group, SETTING_PROTOCOL, 1008, SettingLevel::Basic, m_protocol, labels);
   AddEdit(group, SETTING_SERVER_ADDRESS, 1010, SettingLevel::Basic, m_server, true);
@@ -448,10 +448,9 @@ void CGUIDialogNetworkSetup::UpdateAvailableProtocols()
       {
         // only use first protocol
         auto prots = StringUtils::Split(info.type, "|");
-        m_protocols.emplace_back(Protocol{ info.supportPath, info.supportUsername,
-          info.supportPassword, info.supportPort,
-          info.supportBrowsing, info.defaultPort,
-          prots.front(), info.label });
+        m_protocols.emplace_back(Protocol{
+            info.supportPath, info.supportUsername, info.supportPassword, info.supportPort,
+            info.supportBrowsing, info.defaultPort, prots.front(), info.label, addon->ID()});
       }
     }
   }

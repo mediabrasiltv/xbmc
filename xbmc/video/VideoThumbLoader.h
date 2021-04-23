@@ -92,6 +92,10 @@ public:
    */
   static std::vector<std::string> GetArtTypes(const std::string &type);
 
+  static bool IsValidArtType(const std::string& potentialArtType);
+
+  static bool IsArtTypeInWhitelist(const std::string& artType, const std::vector<std::string>& whitelist, bool exact);
+
   /*! \brief helper function to retrieve a thumb URL for embedded video thumbs
    \param item a video CFileItem.
    \return a URL for the embedded thumb.
@@ -112,13 +116,6 @@ public:
    \sa CImageLoader, IJobCallback
    */
   void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
-
-  /*! \brief set the artwork map for an item
-   In addition, sets the standard fallbacks.
-   \param item the item on which to set art.
-   \param artwork the artwork map.
-   */
-  static void SetArt(CFileItem &item, const std::map<std::string, std::string> &artwork);
 
   static bool GetEmbeddedThumb(const std::string& path,
                                const std::string& type,

@@ -31,6 +31,7 @@
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
+#include "windowing/WindowSystemFactory.h"
 
 #import "platform/darwin/ios/IOSScreenManager.h"
 #import "platform/darwin/ios/XBMCController.h"
@@ -64,10 +65,14 @@ struct CADisplayLinkWrapper
   IOSDisplayLinkCallback *callbackClass;
 };
 
-std::unique_ptr<CWinSystemBase> CWinSystemBase::CreateWinSystem()
+void CWinSystemIOS::Register()
 {
-  std::unique_ptr<CWinSystemBase> winSystem(new CWinSystemIOS());
-  return winSystem;
+  KODI::WINDOWING::CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem);
+}
+
+std::unique_ptr<CWinSystemBase> CWinSystemIOS::CreateWinSystem()
+{
+  return std::make_unique<CWinSystemIOS>();
 }
 
 int CWinSystemIOS::GetDisplayIndexFromSettings()
@@ -238,7 +243,7 @@ bool CWinSystemIOS::GetScreenResolution(int* w, int* h, double* fps, int screenI
     *w = firstMode.size.width;
     *h = firstMode.size.height;
   }
-  
+
   // for mainscreen use the eagl bounds from xbmcController
   // because mainscreen is might be 90° rotate dependend on
   // the device and eagl gives the correct values in all cases.
@@ -256,7 +261,7 @@ bool CWinSystemIOS::GetScreenResolution(int* w, int* h, double* fps, int screenI
       m_internalTouchscreenResolutionWidth = [g_xbmcController getScreenSize].width;
       m_internalTouchscreenResolutionHeight = [g_xbmcController getScreenSize].height;
     }
-    
+
     *w = m_internalTouchscreenResolutionWidth;
     *h = m_internalTouchscreenResolutionHeight;
   }
@@ -303,7 +308,7 @@ void CWinSystemIOS::FillInVideoModes(int screenIdx)
     h = mode.size.height;
 
     UpdateDesktopResolution(res, screenIdx == 0 ? CONST_TOUCHSCREEN : CONST_EXTERNAL, w, h, refreshrate, 0);
-    CLog::Log(LOGNOTICE, "Found possible resolution for display %d with %d x %d\n", screenIdx, w, h);
+    CLog::Log(LOGINFO, "Found possible resolution for display %d with %d x %d", screenIdx, w, h);
 
     CServiceBroker::GetWinSystem()->GetGfxContext().ResetOverscan(res);
     CDisplaySettings::GetInstance().AddResolutionInfo(res);
@@ -400,7 +405,7 @@ bool CWinSystemIOS::InitDisplayLink(CVideoSyncIos *syncImpl)
   [m_pDisplayLink->callbackClass SetVideoSyncImpl:syncImpl];
   m_pDisplayLink->impl = [currentScreen displayLinkWithTarget:m_pDisplayLink->callbackClass selector:@selector(runDisplayLink)];
 
-  [m_pDisplayLink->impl setFrameInterval:1];
+  [m_pDisplayLink->impl setPreferredFramesPerSecond:0];
   [m_pDisplayLink->impl addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
   return m_pDisplayLink->impl != nil;
 }

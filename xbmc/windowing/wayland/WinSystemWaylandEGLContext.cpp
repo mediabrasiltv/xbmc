@@ -17,9 +17,10 @@
 #include <EGL/eglext.h>
 
 using namespace KODI::WINDOWING::WAYLAND;
+using namespace KODI::WINDOWING::LINUX;
 
 CWinSystemWaylandEGLContext::CWinSystemWaylandEGLContext()
-: m_eglContext{EGL_PLATFORM_WAYLAND_EXT, "EGL_EXT_platform_wayland"}
+  : CWinSystemEGL{EGL_PLATFORM_WAYLAND_EXT, "EGL_EXT_platform_wayland"}
 {}
 
 bool CWinSystemWaylandEGLContext::InitWindowSystemEGL(EGLint renderableType, EGLint apiType)
@@ -69,7 +70,8 @@ bool CWinSystemWaylandEGLContext::CreateNewWindow(const std::string& name,
   // CWinSystemWayland::CreateNewWindow sets internal m_bufferSize
   // to the resolution that should be used for the initial surface size
   // - the compositor might want something other than the resolution given
-  if (!m_eglContext.CreatePlatformSurface(m_nativeWindow.c_ptr(), m_nativeWindow.c_ptr()))
+  if (!m_eglContext.CreatePlatformSurface(
+          m_nativeWindow.c_ptr(), reinterpret_cast<khronos_uintptr_t>(m_nativeWindow.c_ptr())))
   {
     return false;
   }
@@ -145,9 +147,4 @@ void CWinSystemWaylandEGLContext::PresentFrame(bool rendered)
   }
 
   FinishFramePresentation();
-}
-
-EGLDisplay CWinSystemWaylandEGLContext::GetEGLDisplay() const
-{
-  return m_eglContext.GetEGLDisplay();
 }

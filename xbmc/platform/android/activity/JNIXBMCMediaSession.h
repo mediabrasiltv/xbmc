@@ -39,7 +39,7 @@ public:
   void OnRewindRequested();
   void OnStopRequested();
   void OnSeekRequested(int64_t pos);
-  bool OnMediaButtonEvent(CJNIIntent intent);
+  bool OnMediaButtonEvent(const CJNIIntent& intent);
   bool isActive() const;
 
 protected:
@@ -53,7 +53,7 @@ protected:
   static void _onSeekRequested(JNIEnv* env, jobject thiz, jlong pos);
   static bool _onMediaButtonEvent(JNIEnv* env, jobject thiz, jobject intent);
 
-  bool m_isActive;
+  bool m_isActive = false;
 };
 
 }

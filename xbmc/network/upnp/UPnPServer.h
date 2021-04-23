@@ -10,6 +10,7 @@
 
 #include "FileItem.h"
 #include "interfaces/IAnnouncer.h"
+#include "utils/logtypes.h"
 
 #include <utility>
 
@@ -30,7 +31,10 @@ class CUPnPServer : public PLT_MediaConnect,
 public:
     CUPnPServer(const char* friendly_name, const char* uuid = NULL, int port = 0);
     ~CUPnPServer() override;
-    void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data) override;
+    void Announce(ANNOUNCEMENT::AnnouncementFlag flag,
+                  const std::string& sender,
+                  const std::string& message,
+                  const CVariant& data) override;
 
     // PLT_MediaServer methods
     NPT_Result OnBrowseMetadata(PLT_ActionReference&          action,
@@ -80,7 +84,11 @@ public:
                                     const char*        host,
                                     const char*        file_path);
 
-    void AddSafeResourceUri(PLT_MediaObject* object, const NPT_HttpUrl& rooturi, NPT_List<NPT_IpAddress> ips, const char* file_path, const NPT_String& info)
+    void AddSafeResourceUri(PLT_MediaObject* object,
+                            const NPT_HttpUrl& rooturi,
+                            const NPT_List<NPT_IpAddress>& ips,
+                            const char* file_path,
+                            const NPT_String& info)
     {
         PLT_MediaItemResource res;
         for(NPT_List<NPT_IpAddress>::Iterator ip = ips.GetFirstItem(); ip; ++ip) {
@@ -92,19 +100,20 @@ public:
 
     /* Samsung's devices get subtitles from header in response (for movie file), not from didl.
        It's a way to store subtitle uri generated when building didl, to use later in http response*/
-    NPT_Result AddSubtitleUriForSecResponse(NPT_String movie_md5, NPT_String subtitle_uri);
+    NPT_Result AddSubtitleUriForSecResponse(const NPT_String& movie_md5,
+                                            const NPT_String& subtitle_uri);
 
 
-private:
+  private:
     void OnScanCompleted(int type);
     void UpdateContainer(const std::string& id);
     void PropagateUpdates();
 
-    PLT_MediaObject* Build(CFileItemPtr                  item,
-                           bool                          with_count,
+    PLT_MediaObject* Build(const CFileItemPtr& item,
+                           bool with_count,
                            const PLT_HttpRequestContext& context,
-                           NPT_Reference<CThumbLoader>&  thumbLoader,
-                           const char*                   parent_id = NULL);
+                           NPT_Reference<CThumbLoader>& thumbLoader,
+                           const char* parent_id = NULL);
     NPT_Result BuildResponse(PLT_ActionReference&          action,
                              CFileItemList&                items,
                              const char*                   filter,
@@ -115,13 +124,14 @@ private:
                              const char*                   parent_id /* = NULL */);
 
     // class methods
-    static bool SortItems(CFileItemList& items, const char* sort_criteria);
     static void DefaultSortItems(CFileItemList& items);
-    static NPT_String GetParentFolder(NPT_String file_path) {
-        int index = file_path.ReverseFind("\\");
-        if (index == -1) return "";
+    static NPT_String GetParentFolder(const NPT_String& file_path)
+    {
+      int index = file_path.ReverseFind("\\");
+      if (index == -1)
+        return "";
 
-        return file_path.Left(index);
+      return file_path.Left(index);
     }
 
     NPT_Mutex m_CacheMutex;
@@ -131,7 +141,10 @@ private:
 
     std::map<std::string, std::pair<bool, unsigned long> > m_UpdateIDs;
     bool m_scanning;
-public:
+
+    Logger m_logger;
+
+  public:
     // class members
     static NPT_UInt32 m_MaxReturnedItems;
 };

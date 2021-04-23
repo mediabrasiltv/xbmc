@@ -54,11 +54,6 @@ XBMCHelper::GetInstance()
 
 /////////////////////////////////////////////////////////////////////////////
 XBMCHelper::XBMCHelper()
-  : m_alwaysOn(false)
-  , m_mode(APPLE_REMOTE_DISABLED)
-  , m_sequenceDelay(0)
-  , m_port(0)
-  , m_errorStarting(false)
 {
   // Compute the KODI_HOME path.
   std::string homePath;
@@ -85,7 +80,7 @@ XBMCHelper::XBMCHelper()
 }
 
 /////////////////////////////////////////////////////////////////////////////
-bool XBMCHelper::OnSettingChanging(std::shared_ptr<const CSetting> setting)
+bool XBMCHelper::OnSettingChanging(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return false;
@@ -158,7 +153,7 @@ void XBMCHelper::Stop()
   int pid = GetProcessPid(XBMC_HELPER_PROGRAM);
   if (pid != -1)
   {
-    CLog::Log(LOGDEBUG,"XBMCHelper: Sending SIGKILL to %s\n", XBMC_HELPER_PROGRAM);
+    CLog::Log(LOGDEBUG, "XBMCHelper: Sending SIGKILL to %s", XBMC_HELPER_PROGRAM);
     kill(pid, SIGKILL);
   }
 }
@@ -216,12 +211,12 @@ void XBMCHelper::Configure()
     strConfig += strDelay;
 
     // Find out where we're running from.
-    char real_path[2*MAXPATHLEN];
-    char given_path[2*MAXPATHLEN];
-    uint32_t path_size = 2*MAXPATHLEN;
+    char given_path[2 * MAXPATHLEN];
+    uint32_t path_size = 2 * MAXPATHLEN;
 
     if (_NSGetExecutablePath(given_path, &path_size) == 0)
     {
+      char real_path[2 * MAXPATHLEN];
       if (realpath(given_path, real_path) != NULL)
       {
         strConfig += "--appPath \"";

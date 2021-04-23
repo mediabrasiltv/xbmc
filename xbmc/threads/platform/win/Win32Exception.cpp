@@ -65,18 +65,19 @@ bool win32_exception::write_minidump(EXCEPTION_POINTERS* pEp)
   bool returncode = false;
   std::string dumpFileName;
   std::wstring dumpFileNameW;
-  SYSTEMTIME stLocalTime;
-  GetLocalTime(&stLocalTime);
+  KODI::TIME::SystemTime stLocalTime;
+  KODI::TIME::GetLocalTime(&stLocalTime);
 
-  dumpFileName = StringUtils::Format("kodi_crashlog-%s-%04d%02d%02d-%02d%02d%02d.dmp",
-                      mVersion.c_str(),
-                      stLocalTime.wYear, stLocalTime.wMonth, stLocalTime.wDay,
-                      stLocalTime.wHour, stLocalTime.wMinute, stLocalTime.wSecond);
+  dumpFileName = StringUtils::Format(
+      "kodi_crashlog-%s-%04d%02d%02d-%02d%02d%02d.dmp", mVersion.c_str(), stLocalTime.year,
+      stLocalTime.month, stLocalTime.day, stLocalTime.hour, stLocalTime.minute, stLocalTime.second);
 
   dumpFileName = CWIN32Util::SmbToUnc(URIUtils::AddFileToFolder(CWIN32Util::GetProfilePath(), CUtil::MakeLegalFileName(dumpFileName)));
 
   dumpFileNameW = KODI::PLATFORM::WINDOWS::ToW(dumpFileName);
   HANDLE hDumpFile = CreateFileW(dumpFileNameW.c_str(), GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
+
+  HMODULE hDbgHelpDll = nullptr;
 
   if (hDumpFile == INVALID_HANDLE_VALUE)
   {
@@ -84,7 +85,7 @@ bool win32_exception::write_minidump(EXCEPTION_POINTERS* pEp)
   }
 
   // Load the DBGHELP DLL
-  HMODULE hDbgHelpDll = ::LoadLibrary(L"DBGHELP.DLL");
+  hDbgHelpDll = ::LoadLibrary(L"DBGHELP.DLL");
   if (!hDbgHelpDll)
   {
     goto cleanup;
@@ -136,8 +137,8 @@ bool win32_exception::write_stacktrace(EXCEPTION_POINTERS* pEp)
   std::wstring dumpFileNameW;
   CHAR cTemp[STACKWALK_MAX_NAMELEN];
   DWORD dwBytes;
-  SYSTEMTIME stLocalTime;
-  GetLocalTime(&stLocalTime);
+  KODI::TIME::SystemTime stLocalTime;
+  KODI::TIME::GetLocalTime(&stLocalTime);
   bool returncode = false;
   STACKFRAME64 frame = { 0 };
   HANDLE hCurProc = GetCurrentProcess();
@@ -166,10 +167,9 @@ bool win32_exception::write_stacktrace(EXCEPTION_POINTERS* pEp)
      pSFTA == NULL || pSGMB == NULL)
     goto cleanup;
 
-  dumpFileName = StringUtils::Format("kodi_stacktrace-%s-%04d%02d%02d-%02d%02d%02d.txt",
-                                      mVersion.c_str(),
-                                      stLocalTime.wYear, stLocalTime.wMonth, stLocalTime.wDay,
-                                      stLocalTime.wHour, stLocalTime.wMinute, stLocalTime.wSecond);
+  dumpFileName = StringUtils::Format(
+      "kodi_stacktrace-%s-%04d%02d%02d-%02d%02d%02d.txt", mVersion.c_str(), stLocalTime.year,
+      stLocalTime.month, stLocalTime.day, stLocalTime.hour, stLocalTime.minute, stLocalTime.second);
 
   dumpFileName = CWIN32Util::SmbToUnc(URIUtils::AddFileToFolder(CWIN32Util::GetProfilePath(), CUtil::MakeLegalFileName(dumpFileName)));
 

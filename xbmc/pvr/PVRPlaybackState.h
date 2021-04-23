@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "threads/CriticalSection.h"
+
 #include <memory>
 #include <string>
 
@@ -35,23 +37,33 @@ public:
   virtual ~CPVRPlaybackState();
 
   /*!
+   * @brief clear instances, keep stored UIDs.
+   */
+  void Clear();
+
+  /*!
+   * @brief re-init using stored UIDs.
+   */
+  void ReInit();
+
+  /*!
    * @brief Inform that playback of an item just started.
    * @param item The item that started to play.
    */
-  void OnPlaybackStarted(const std::shared_ptr<CFileItem> item);
+  void OnPlaybackStarted(const std::shared_ptr<CFileItem>& item);
 
   /*!
    * @brief Inform that playback of an item was stopped due to user interaction.
    * @param item The item that stopped to play.
    * @return True, if the state has changed, false otherwise
    */
-  bool OnPlaybackStopped(const std::shared_ptr<CFileItem> item);
+  bool OnPlaybackStopped(const std::shared_ptr<CFileItem>& item);
 
   /*!
    * @brief Inform that playback of an item has stopped without user interaction.
    * @param item The item that ended to play.
    */
-  void OnPlaybackEnded(const std::shared_ptr<CFileItem> item);
+  void OnPlaybackEnded(const std::shared_ptr<CFileItem>& item);
 
   /*!
    * @brief Check if a TV channel, radio channel or recording is playing.
@@ -137,6 +149,12 @@ public:
   std::shared_ptr<CPVREpgInfoTag> GetPlayingEpgTag() const;
 
   /*!
+   * @brief Return playing channel unique identifier
+   * @return The channel id or -1 if not present
+   */
+  int GetPlayingChannelUniqueID() const;
+
+  /*!
    * @brief Get the name of the playing client, if there is one.
    * @return The name of the client or an empty string if nothing is playing.
    */
@@ -185,6 +203,23 @@ public:
    */
   std::shared_ptr<CPVRChannelGroup> GetPlayingGroup(bool bRadio) const;
 
+  /*!
+   * @brief Get current playback time for the given channel, taking timeshifting and playing
+   * epg tags into account.
+   * @param iClientID The client id.
+   * @param iUniqueChannelID The channel uid.
+   * @return The playback time or 'now' if not playing.
+   */
+  CDateTime GetPlaybackTime(int iClientID, int iUniqueChannelID) const;
+
+  /*!
+   * @brief Get current playback time for the given channel, taking timeshifting into account.
+   * @param iClientID The client id.
+   * @param iUniqueChannelID The channel uid.
+   * @return The playback time or 'now' if not playing.
+   */
+  CDateTime GetChannelPlaybackTime(int iClientID, int iUniqueChannelID) const;
+
 private:
   /*!
    * @brief Set the playing group to the first group the channel is in if the given channel is not part of the current playing group
@@ -199,12 +234,17 @@ private:
    */
   void UpdateLastWatched(const std::shared_ptr<CPVRChannel>& channel, const CDateTime& time);
 
+  mutable CCriticalSection m_critSection;
+
   std::shared_ptr<CPVRChannel> m_playingChannel;
   std::shared_ptr<CPVRRecording> m_playingRecording;
   std::shared_ptr<CPVREpgInfoTag> m_playingEpgTag;
   std::string m_strPlayingClientName;
   int m_playingClientId = -1;
-  int m_iplayingChannelUniqueID = -1;
+  int m_playingChannelUniqueId = -1;
+  std::string m_strPlayingRecordingUniqueId;
+  int m_playingEpgTagChannelUniqueId = -1;
+  unsigned int m_playingEpgTagUniqueId = 0;
 
   class CLastWatchedUpdateTimer;
   std::unique_ptr<CLastWatchedUpdateTimer> m_lastWatchedUpdateTimer;

@@ -23,53 +23,19 @@
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
-
-#include "platform/linux/OptionalsReg.h"
+#include "windowing/WindowSystemFactory.h"
 
 using namespace KODI;
+using namespace KODI::WINDOWING::X11;
 
-std::unique_ptr<CWinSystemBase> CWinSystemBase::CreateWinSystem()
+void CWinSystemX11GLESContext::Register()
 {
-  std::unique_ptr<CWinSystemBase> winSystem(new CWinSystemX11GLESContext());
-  return winSystem;
+  KODI::WINDOWING::CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem, "x11");
 }
 
-CWinSystemX11GLESContext::CWinSystemX11GLESContext()
+std::unique_ptr<CWinSystemBase> CWinSystemX11GLESContext::CreateWinSystem()
 {
-  std::string envSink;
-  if (getenv("KODI_AE_SINK"))
-    envSink = getenv("KODI_AE_SINK");
-  if (StringUtils::EqualsNoCase(envSink, "ALSA"))
-  {
-    OPTIONALS::ALSARegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "PULSE"))
-  {
-    OPTIONALS::PulseAudioRegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "OSS"))
-  {
-    OPTIONALS::OSSRegister();
-  }
-  else if (StringUtils::EqualsNoCase(envSink, "SNDIO"))
-  {
-    OPTIONALS::SndioRegister();
-  }
-  else
-  {
-    if (!OPTIONALS::PulseAudioRegister())
-    {
-      if (!OPTIONALS::ALSARegister())
-      {
-        if (!OPTIONALS::SndioRegister())
-        {
-          OPTIONALS::OSSRegister();
-        }
-      }
-    }
-  }
-
-  m_lirc.reset(OPTIONALS::LircRegister());
+  return std::make_unique<CWinSystemX11GLESContext>();
 }
 
 CWinSystemX11GLESContext::~CWinSystemX11GLESContext()
@@ -154,7 +120,7 @@ bool CWinSystemX11GLESContext::SetWindow(int width, int height, bool fullscreen,
 
 bool CWinSystemX11GLESContext::CreateNewWindow(const std::string& name, bool fullScreen, RESOLUTION_INFO& res)
 {
-  CLog::Log(LOGNOTICE, "CWinSystemX11GLESContext::CreateNewWindow");
+  CLog::Log(LOGINFO, "CWinSystemX11GLESContext::CreateNewWindow");
   if (!CWinSystemX11::CreateNewWindow(name, fullScreen, res) || !m_pGLContext)
     return false;
 
@@ -230,12 +196,12 @@ XVisualInfo* CWinSystemX11GLESContext::GetVisual()
 
   if (eglDisplay == EGL_NO_DISPLAY)
   {
-    CLog::Log(LOGERROR, "failed to get egl display\n");
+    CLog::Log(LOGERROR, "failed to get egl display");
     return nullptr;
   }
   if (!eglInitialize(eglDisplay, nullptr, nullptr))
   {
-    CLog::Log(LOGERROR, "failed to initialize egl display\n");
+    CLog::Log(LOGERROR, "failed to initialize egl display");
     return nullptr;
   }
 
@@ -254,20 +220,22 @@ XVisualInfo* CWinSystemX11GLESContext::GetVisual()
   EGLConfig eglConfig = 0;
   if (!eglChooseConfig(eglDisplay, att, &eglConfig, 1, &numConfigs) || numConfigs == 0)
   {
-    CLog::Log(LOGERROR, "Failed to choose a config %d\n", eglGetError());
+    CLog::Log(LOGERROR, "Failed to choose a config %d", eglGetError());
     return nullptr;
   }
 
   XVisualInfo x11_visual_info_template;
+  memset(&x11_visual_info_template, 0, sizeof(XVisualInfo));
+
   if (!eglGetConfigAttrib(eglDisplay, eglConfig,
     EGL_NATIVE_VISUAL_ID, reinterpret_cast<EGLint*>(&x11_visual_info_template.visualid)))
   {
-    CLog::Log(LOGERROR, "Failed to query native visual id\n");
+    CLog::Log(LOGERROR, "Failed to query native visual id");
     return nullptr;
   }
   int num_visuals;
-  XVisualInfo* visual = 
-    XGetVisualInfo(m_dpy, VisualIDMask, &x11_visual_info_template, &num_visuals);
+  XVisualInfo* visual =
+      XGetVisualInfo(m_dpy, VisualIDMask, &x11_visual_info_template, &num_visuals);
   return visual;
 }
 

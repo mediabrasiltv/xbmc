@@ -26,22 +26,25 @@
  *   of locks needed.
  */
 
+#include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/DVDCodecs/Video/DVDVideoCodec.h"
-#include "cores/VideoPlayer/Process/VideoBuffer.h"
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include "threads/CriticalSection.h"
-#include "threads/SharedSection.h"
 #include "cores/VideoSettings.h"
 #include "guilib/DispResource.h"
+#include "threads/CriticalSection.h"
 #include "threads/Event.h"
+#include "threads/SharedSection.h"
 #include "threads/Thread.h"
 #include "utils/ActorProtocol.h"
 #include "utils/Geometry.h"
+
 #include <deque>
 #include <list>
 #include <map>
+#include <utility>
 #include <vector>
+
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -239,7 +242,8 @@ public:
 class CMixerControlProtocol : public Actor::Protocol
 {
 public:
-  CMixerControlProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Protocol(name, inEvent, outEvent) {};
+  CMixerControlProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     INIT = 0,
@@ -256,7 +260,8 @@ public:
 class CMixerDataProtocol : public Actor::Protocol
 {
 public:
-  CMixerDataProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Protocol(name, inEvent, outEvent) {};
+  CMixerDataProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     FRAME,
@@ -346,7 +351,8 @@ protected:
 class COutputControlProtocol : public Actor::Protocol
 {
 public:
-  COutputControlProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Actor::Protocol(name, inEvent, outEvent) {};
+  COutputControlProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Actor::Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     INIT,
@@ -365,7 +371,8 @@ public:
 class COutputDataProtocol : public Actor::Protocol
 {
 public:
-  COutputDataProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Actor::Protocol(name, inEvent, outEvent) {};
+  COutputDataProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Actor::Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     NEWFRAME = 0,

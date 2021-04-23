@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "VideoBuffer.h"
+#include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderInfo.h"
 #include "cores/VideoSettings.h"
 #include "threads/CriticalSection.h"
@@ -27,7 +27,7 @@ class CProcessInfo
 {
 public:
   static CProcessInfo* CreateInstance();
-  static void RegisterProcessControl(std::string id, CreateProcessControl createFunc);
+  static void RegisterProcessControl(const std::string& id, CreateProcessControl createFunc);
   virtual ~CProcessInfo() = default;
   void SetDataCache(CDataCacheCore *cache);
 

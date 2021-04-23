@@ -63,7 +63,6 @@ Several different strategies are used to draw your attention to certain pieces o
 * Device with **tvOS 11.0 or newer** to install Kodi after build.
 
 Building for tvOS should work with the following combinations of Xcode and macOS versions:
-  * Xcode 9.x against tvOS SDK 11.x on 10.12.x (Sierra)
   * Xcode 9.x against tvOS SDK 11.x on 10.13.x (High Sierra)(recommended)
   * Xcode 9.x against tvOS SDK 11.x on 10.14.x (Mojave)(recommended)
   * Xcode 10.x against tvOS SDK 12.x on 10.14.x (Mojave)(recommended)
@@ -87,12 +86,13 @@ git clone https://github.com/xbmc/xbmc kodi
 
 ## 4. Configure and build tools and dependencies
 Kodi can be built as a 64bit program only for tvOS. The dependencies are built in `$HOME/kodi/tools/depends` and installed into `/Users/Shared/xbmc-depends`.
+**NOTE:** `--with-platform` is mandatory for all Apple platforms
 
 Configure build:
 ```
 cd $HOME/kodi/tools/depends
 ./bootstrap
-./configure --host=arm-apple-darwin --with-platform=tvos
+./configure --host=aarch64-apple-darwin --with-platform=tvos
 ```
 
 Build tools and dependencies:
@@ -106,7 +106,7 @@ make -j$(getconf _NPROCESSORS_ONLN)
 
 **NOTE:** **Advanced developers** may want to specify an tvOS SDK version (if multiple versions are installed) in the configure line(s) shown above. The example below would use the tvOS SDK 11.0:
 ```
-./configure --host=arm-apple-darwin --with-platform=tvos --with-sdk=11.0
+./configure --host=aarch64-apple-darwin --with-platform=tvos --with-sdk=11.0
 ```
 
 **[back to top](#table-of-contents)**
@@ -162,6 +162,7 @@ Generate Xcode project to build a specific group of add-ons:
 ```
 make -C tools/depends/target/cmakebuildsys CMAKE_EXTRA_ARGUMENTS="-DENABLE_XCODE_ADDONBUILD=ON -DADDONS_TO_BUILD='pvr.*'"
 ```
+For additional information on regular expression usage for ADDONS_TO_BUILD, view ADDONS_TO_BUILD section located at [Kodi add-ons CMake based buildsystem](../cmake/addons/README.md)
 
 Generate Xcode project to build all add-ons automatically:
 ```
@@ -248,9 +249,9 @@ Note that using a free developer account the signing will need to be reapplied e
 
   1. Open the Xcode project in Xcode as above (requires Xcode 7 or later)
   2. Select Xcode->Preferences and select Accounts
-    * Hit the + sign to add an Apple ID accoumt and Login.
+    * Hit the + sign to add an Apple ID account and Login.
   2. Next select the kodi build target
-  3. Under the `General` tab, enter a unique bundle identifer and check the box to `Automatically Manage Signing`.
+  3. Under the `General` tab, enter a unique bundle identifier and check the box to `Automatically Manage Signing`.
   4. Select your team under `Automatically Manage Signing`.
 
 ## An important note on Code Signing

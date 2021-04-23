@@ -111,6 +111,8 @@
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UIInterfaceOrientation</key>
 	<string>UIInterfaceOrientationLandscapeLeft</string>
 	<key>UILaunchStoryboardName</key>
@@ -119,7 +121,7 @@
 	<true/>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 		<string>opengles-2</string>
 		<string>wifi</string>
 	</array>

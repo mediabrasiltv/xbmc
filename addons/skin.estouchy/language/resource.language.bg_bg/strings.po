@@ -56,6 +56,10 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "Епизоди"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr "Информация за плейъра"
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "Албуми"
@@ -95,6 +99,18 @@ msgstr "Влизане"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Обновено:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr "Select + X"
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr "Select + Start"
+
+msgctxt "#31043"
+msgid "PAUSED"
+msgstr "НА ПАУЗА"
 
 msgctxt "#31044"
 msgid "FAST FORWARD"

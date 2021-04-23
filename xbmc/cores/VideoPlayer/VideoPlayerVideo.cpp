@@ -12,8 +12,8 @@
 #include "DVDCodecs/DVDFactoryCodec.h"
 #include "DVDCodecs/Video/DVDVideoCodecFFmpeg.h"
 #include "ServiceBroker.h"
-#include "cores/VideoPlayer/Interface/Addon/DemuxPacket.h"
-#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
 #include "utils/MathUtils.h"
@@ -118,7 +118,7 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
       return false;
   }
 
-  CLog::Log(LOGNOTICE, "Creating video codec with codec id: %i", hint.codec);
+  CLog::Log(LOGINFO, "Creating video codec with codec id: %i", hint.codec);
 
   if (m_messageQueue.IsInited())
   {
@@ -144,7 +144,7 @@ bool CVideoPlayerVideo::OpenStream(CDVDStreamInfo hint)
       return false;
     }
     OpenStream(hint, codec);
-    CLog::Log(LOGNOTICE, "Creating video thread");
+    CLog::Log(LOGINFO, "Creating video thread");
     m_messageQueue.Init();
     m_processInfo.SetLevelVQ(0);
     Create();
@@ -202,7 +202,7 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo &hint, CDVDVideoCodec* codec)
   }
   if (!codec)
   {
-    CLog::Log(LOGNOTICE, "Creating video codec with codec id: %i", hint.codec);
+    CLog::Log(LOGINFO, "Creating video codec with codec id: %i", hint.codec);
     hint.codecOptions |= CODEC_ALLOW_FALLBACK;
     codec = CDVDFactoryCodec::CreateVideoCodec(hint, m_processInfo);
     if (!codec)
@@ -234,14 +234,14 @@ void CVideoPlayerVideo::CloseStream(bool bWaitForBuffers)
   m_messageQueue.Abort();
 
   // wait for decode_video thread to end
-  CLog::Log(LOGNOTICE, "waiting for video thread to exit");
+  CLog::Log(LOGINFO, "waiting for video thread to exit");
 
   m_bAbortOutput = true;
   StopThread();
 
   m_messageQueue.End();
 
-  CLog::Log(LOGNOTICE, "deleting video codec");
+  CLog::Log(LOGINFO, "deleting video codec");
   if (m_pVideoCodec)
   {
     delete m_pVideoCodec;
@@ -298,7 +298,7 @@ inline MsgQueueReturnCode CVideoPlayerVideo::GetMessage(CDVDMsg** pMsg, unsigned
 
 void CVideoPlayerVideo::Process()
 {
-  CLog::Log(LOGNOTICE, "running thread: video_thread");
+  CLog::Log(LOGINFO, "running thread: video_thread");
 
   double pts = 0;
   double frametime = (double)DVD_TIME_BASE / m_fFrameRate;
@@ -379,7 +379,8 @@ void CVideoPlayerVideo::Process()
             break;
         }
 
-        CLog::Log(LOGINFO, "CVideoPlayerVideo - Stillframe detected, switching to forced %f fps", m_fFrameRate);
+        CLog::Log(LOGDEBUG, "CVideoPlayerVideo - Stillframe detected, switching to forced %f fps",
+                  m_fFrameRate);
         m_stalled = true;
         pts += frametime * 4;
       }
@@ -522,7 +523,7 @@ void CVideoPlayerVideo::Process()
 
       if (m_stalled)
       {
-        CLog::Log(LOGINFO, "CVideoPlayerVideo - Stillframe left, switching to normal playback");
+        CLog::Log(LOGDEBUG, "CVideoPlayerVideo - Stillframe left, switching to normal playback");
         m_stalled = false;
       }
 
@@ -763,7 +764,7 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(double &frametime, double &pts)
 
 void CVideoPlayerVideo::OnExit()
 {
-  CLog::Log(LOGNOTICE, "thread end: video_thread");
+  CLog::Log(LOGINFO, "thread end: video_thread");
 }
 
 void CVideoPlayerVideo::SetSpeed(int speed)
@@ -884,7 +885,7 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
       if (inputPts >= renderPts)
       {
         m_rewindStalled = true;
-        Sleep(50);
+        CThread::Sleep(50);
       }
       return OUTPUT_DROPPED;
     }
@@ -911,6 +912,8 @@ CVideoPlayerVideo::EOutputState CVideoPlayerVideo::OutputPicture(const VideoPict
   int buffer = m_renderManager.WaitForBuffer(m_bAbortOutput, maxWaitTime);
   if (buffer < 0)
   {
+    if (m_speed != DVD_PLAYSPEED_PAUSE)
+      CLog::Log(LOGWARNING, "{} - timeout waiting for buffer", __FUNCTION__);
     return OUTPUT_AGAIN;
   }
 

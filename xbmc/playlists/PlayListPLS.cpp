@@ -105,7 +105,7 @@ bool CPlayListPLS::Load(const std::string &strFile)
   {
     strLine = szLine;
     StringUtils::RemoveCRLF(strLine);
-    size_t iPosEqual = strLine.find("=");
+    size_t iPosEqual = strLine.find('=');
     if (iPosEqual != std::string::npos)
     {
       std::string strLeft = strLine.substr(0, iPosEqual);
@@ -276,7 +276,7 @@ bool CPlayListASX::LoadAsxIniInfo(std::istream &stream)
 
 bool CPlayListASX::LoadData(std::istream& stream)
 {
-  CLog::Log(LOGNOTICE, "Parsing ASX");
+  CLog::Log(LOGINFO, "Parsing ASX");
 
   if(stream.peek() == '[')
   {

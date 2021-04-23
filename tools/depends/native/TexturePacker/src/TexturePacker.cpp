@@ -49,7 +49,7 @@
 
 #define FLAGS_USE_LZO     1
 
-#define DIR_SEPARATOR "/"
+#define DIR_SEPARATOR '/'
 
 const char *GetFormatString(unsigned int format)
 {
@@ -72,7 +72,9 @@ const char *GetFormatString(unsigned int format)
   }
 }
 
-void CreateSkeletonHeaderImpl(CXBTFWriter& xbtfWriter, std::string fullPath, std::string relativePath)
+void CreateSkeletonHeaderImpl(CXBTFWriter& xbtfWriter,
+                              const std::string& fullPath,
+                              const std::string& relativePath)
 {
   struct dirent* dp;
   struct stat stat_p;
@@ -80,7 +82,7 @@ void CreateSkeletonHeaderImpl(CXBTFWriter& xbtfWriter, std::string fullPath, std
 
   if (dirp)
   {
-    while ((dp = readdir(dirp)) != NULL)
+    for (errno = 0; (dp = readdir(dirp)); errno = 0)
     {
       if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
       {
@@ -118,6 +120,8 @@ void CreateSkeletonHeaderImpl(CXBTFWriter& xbtfWriter, std::string fullPath, std
         }
       }
     }
+    if (errno)
+      fprintf(stderr, "Error reading directory %s (%s)\n", fullPath.c_str(), strerror(errno));
 
     closedir(dirp);
   }
@@ -127,7 +131,7 @@ void CreateSkeletonHeaderImpl(CXBTFWriter& xbtfWriter, std::string fullPath, std
   }
 }
 
-void CreateSkeletonHeader(CXBTFWriter& xbtfWriter, std::string fullPath)
+void CreateSkeletonHeader(CXBTFWriter& xbtfWriter, const std::string& fullPath)
 {
   std::string temp;
   CreateSkeletonHeaderImpl(xbtfWriter, fullPath, temp);

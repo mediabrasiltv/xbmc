@@ -148,7 +148,6 @@ public:
   virtual void Close();
   virtual int Read(uint8_t* buf, int buf_size) = 0;
   virtual int64_t Seek(int64_t offset, int whence) = 0;
-  virtual bool Pause(double dTime) = 0;
   virtual int64_t GetLength() = 0;
   virtual std::string& GetContent() { return m_content; };
   virtual std::string GetFileName();
@@ -187,7 +186,7 @@ public:
   virtual ITimes* GetITimes() { return nullptr; }
   virtual IChapter* GetIChapter() { return nullptr; }
 
-  const CVariant &GetProperty(const std::string key){ return m_item.GetProperty(key); }
+  const CVariant& GetProperty(const std::string& key) { return m_item.GetProperty(key); }
 
 protected:
   DVDStreamType m_streamType;

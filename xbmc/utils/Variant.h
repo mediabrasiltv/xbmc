@@ -64,7 +64,7 @@ public:
   CVariant(const std::map<std::string, std::string> &strMap);
   CVariant(const std::map<std::string, CVariant> &variantMap);
   CVariant(const CVariant &variant);
-  CVariant(CVariant &&rhs);
+  CVariant(CVariant&& rhs) noexcept;
   ~CVariant();
 
 
@@ -98,10 +98,11 @@ public:
   const CVariant &operator[](unsigned int position) const;
 
   CVariant &operator=(const CVariant &rhs);
-  CVariant &operator=(CVariant &&rhs);
+  CVariant& operator=(CVariant&& rhs) noexcept;
   bool operator==(const CVariant &rhs) const;
   bool operator!=(const CVariant &rhs) const { return !(*this == rhs); }
 
+  void reserve(size_t length);
   void push_back(const CVariant &variant);
   void push_back(CVariant &&variant);
   void append(const CVariant &variant);

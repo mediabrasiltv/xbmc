@@ -6,8 +6,10 @@ set(SOURCES CharsetConverter.cpp
             dxerr.cpp
             Filesystem.cpp
             pch.cpp
+            PlatformWin32.cpp
             WIN32Util.cpp
-            WindowHelper.cpp)
+            WindowHelper.cpp
+            XTimeUtils.cpp)
 
 set(HEADERS CharsetConverter.h
             CPUInfoWin32.h
@@ -19,6 +21,7 @@ set(HEADERS CharsetConverter.h
             netdb.h
             pch.h
             PlatformDefs.h
+            PlatformWin32.h
             resource.h
             unistd.h
             WIN32Util.h

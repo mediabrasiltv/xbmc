@@ -26,7 +26,7 @@ CDatabaseManager::CDatabaseManager() :
   m_bIsUpgrading(false)
 {
   // Initialize the addon database (must be before the addon manager is init'd)
-  CAddonDatabase db;
+  ADDON::CAddonDatabase db;
   UpdateDatabase(db);
 }
 
@@ -44,7 +44,10 @@ void CDatabaseManager::Initialize()
 
   // NOTE: Order here is important. In particular, CTextureDatabase has to be updated
   //       before CVideoDatabase.
-  { CAddonDatabase db; UpdateDatabase(db); }
+  {
+    ADDON::CAddonDatabase db;
+    UpdateDatabase(db);
+  }
   { CViewDatabase db; UpdateDatabase(db); }
   { CTextureDatabase db; UpdateDatabase(db); }
   { CMusicDatabase db; UpdateDatabase(db, &advancedSettings->m_databaseMusic); }
@@ -96,7 +99,8 @@ bool CDatabaseManager::Update(CDatabase &db, const DatabaseSettings &settings)
       // Database exists, take a copy for our current version (if needed) and reopen that one
       if (version < db.GetSchemaVersion())
       {
-        CLog::Log(LOGNOTICE, "Old database found - updating from version %i to %i", version, db.GetSchemaVersion());
+        CLog::Log(LOGINFO, "Old database found - updating from version %i to %i", version,
+                  db.GetSchemaVersion());
         m_bIsUpgrading = true;
 
         bool copy_fail = false;
@@ -156,7 +160,8 @@ bool CDatabaseManager::UpdateVersion(CDatabase &db, const std::string &dbName)
   }
   else if (version < db.GetSchemaVersion())
   {
-    CLog::Log(LOGNOTICE, "Attempting to update the database %s from version %i to %i", dbName.c_str(), version, db.GetSchemaVersion());
+    CLog::Log(LOGINFO, "Attempting to update the database %s from version %i to %i", dbName.c_str(),
+              version, db.GetSchemaVersion());
     bool success = true;
     db.BeginTransaction();
     try
@@ -189,7 +194,7 @@ bool CDatabaseManager::UpdateVersion(CDatabase &db, const std::string &dbName)
   else
   {
     bReturn = true;
-    CLog::Log(LOGNOTICE, "Running database version %s", dbName.c_str());
+    CLog::Log(LOGINFO, "Running database version %s", dbName.c_str());
   }
 
   return bReturn;

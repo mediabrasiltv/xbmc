@@ -349,7 +349,15 @@ bool CGUIWindowPVRBase::OnMessage(CGUIMessage& message)
           m_viewControl.SetFocused();
           break;
         }
-
+        case PVREvent::ChannelGroupsInvalidated:
+        {
+          std::shared_ptr<CPVRChannelGroup> group =
+              CServiceBroker::GetPVRManager().PlaybackState()->GetPlayingGroup(m_bRadio);
+          m_channelGroupsSelector->Initialize(this, m_bRadio);
+          m_channelGroupsSelector->SelectChannelGroup(group);
+          SetChannelGroup(std::move(group));
+          break;
+        }
         default:
           break;
       }
@@ -450,7 +458,8 @@ bool CGUIWindowPVRBase::InitChannelGroup()
     if (group)
       CServiceBroker::GetPVRManager().PlaybackState()->SetPlayingGroup(group);
     else
-      CLog::LogF(LOGERROR, "Found no %s channel group with path '%s'!", m_bRadio ? "radio" : "TV", m_vecItems->GetPath().c_str());
+      CLog::LogF(LOGERROR, "Found no {} channel group with path '{}'!", m_bRadio ? "radio" : "TV",
+                 m_vecItems->GetPath());
   }
 
   if (group)

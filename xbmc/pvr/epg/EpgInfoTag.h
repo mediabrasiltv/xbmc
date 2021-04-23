@@ -27,7 +27,6 @@ namespace PVR
   class CPVREpgInfoTag final : public ISerializable,
                                public std::enable_shared_from_this<CPVREpgInfoTag>
   {
-    friend class CPVREpg;
     friend class CPVREpgDatabase;
 
   public:
@@ -272,15 +271,9 @@ namespace PVR
 
     /*!
      * @brief Get the first air date of this event.
-     * @return The first air date in UTC.
+     * @return The first air date.
      */
-    CDateTime FirstAiredAsUTC() const;
-
-    /*!
-     * @brief Get the first air date of this event.
-     * @return The first air date as local time.
-     */
-    CDateTime FirstAiredAsLocalTime() const;
+    CDateTime FirstAired() const;
 
     /*!
      * @brief Get the parental rating of this event.
@@ -349,12 +342,11 @@ namespace PVR
     bool IsPlayable() const;
 
     /*!
-     * @brief Persist this tag in the given database.
+     * @brief Write query to persist this tag in the query queue of the given database.
      * @param database The database.
-     * @param bSingleUpdate True if this is a single update, false if more updates will follow.
-     * @return True if the tag was persisted correctly, false otherwise.
+     * @return True on success, false otherwise.
      */
-    bool Persist(const std::shared_ptr<CPVREpgDatabase>& database, bool bSingleUpdate = true);
+    bool QueuePersistQuery(const std::shared_ptr<CPVREpgDatabase>& database);
 
     /*!
      * @brief Update the information in this tag with the info in the given tag.
@@ -393,6 +385,30 @@ namespace PVR
      * @return True if this event is a gap, false otherwise.
      */
     bool IsGapTag() const;
+
+    /*!
+     * @brief Check whether this tag will be flagged as new.
+     * @return True if this tag will be flagged as new, false otherwise
+     */
+    bool IsNew() const;
+
+    /*!
+     * @brief Check whether this tag will be flagged as a premiere.
+     * @return True if this tag will be flagged as a premiere, false otherwise
+     */
+    bool IsPremiere() const;
+
+    /*!
+     * @brief Check whether this tag will be flagged as a finale.
+     * @return True if this tag will be flagged as a finale, false otherwise
+     */
+    bool IsFinale() const;
+
+    /*!
+     * @brief Check whether this tag will be flagged as live.
+     * @return True if this tag will be flagged as live, false otherwise
+     */
+    bool IsLive() const;
 
     /*!
      * @brief Return the flags (EPG_TAG_FLAG_*) of this event as a bitfield.
@@ -443,9 +459,9 @@ namespace PVR
     int m_iGenreSubType = 0; /*!< genre subtype */
     int m_iParentalRating = 0; /*!< parental rating */
     int m_iStarRating = 0; /*!< star rating */
-    int m_iSeriesNumber = 0; /*!< series number */
-    int m_iEpisodeNumber = 0; /*!< episode number */
-    int m_iEpisodePart = 0; /*!< episode part number */
+    int m_iSeriesNumber = -1; /*!< series number */
+    int m_iEpisodeNumber = -1; /*!< episode number */
+    int m_iEpisodePart = -1; /*!< episode part number */
     unsigned int m_iUniqueBroadcastID = 0; /*!< unique broadcast ID */
     std::string m_strTitle; /*!< title */
     std::string m_strPlotOutline; /*!< plot outline */

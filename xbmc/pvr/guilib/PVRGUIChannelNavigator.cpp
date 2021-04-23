@@ -21,10 +21,7 @@
 #include "threads/SingleLock.h"
 #include "utils/Job.h"
 #include "utils/JobManager.h"
-
-#ifdef TARGET_POSIX
-#include "platform/posix/XTimeUtils.h"
-#endif
+#include "utils/XTimeUtils.h"
 
 namespace
 {
@@ -53,7 +50,7 @@ public:
         OnTimeout();
         return true;
       }
-      Sleep(10);
+      KODI::TIME::Sleep(10);
     }
     return false;
   }
@@ -133,7 +130,8 @@ namespace PVR
     return {};
   }
 
-  void CPVRGUIChannelNavigator::SelectChannel(const std::shared_ptr<CPVRChannel> channel, ChannelSwitchMode eSwitchMode)
+  void CPVRGUIChannelNavigator::SelectChannel(const std::shared_ptr<CPVRChannel>& channel,
+                                              ChannelSwitchMode eSwitchMode)
   {
     CServiceBroker::GetGUI()->GetInfoManager().SetCurrentItem(CFileItem(channel));
 
@@ -256,7 +254,7 @@ namespace PVR
       ShowInfo();
   }
 
-  void CPVRGUIChannelNavigator::SetPlayingChannel(const std::shared_ptr<CPVRChannel> channel)
+  void CPVRGUIChannelNavigator::SetPlayingChannel(const std::shared_ptr<CPVRChannel>& channel)
   {
     CFileItemPtr item;
 

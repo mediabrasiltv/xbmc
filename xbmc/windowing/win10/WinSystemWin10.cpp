@@ -12,7 +12,6 @@
 #include "cores/AudioEngine/Sinks/AESinkWASAPI.h"
 #include "windowing/GraphicContext.h"
 #include "platform/win10/AsyncHelpers.h"
-#include "platform/win10/powermanagement/Win10PowerSyscall.h"
 #include "platform/win32/CharsetConverter.h"
 #include "rendering/dx/DirectXHelper.h"
 #include "rendering/dx/RenderContext.h"
@@ -65,7 +64,6 @@ CWinSystemWin10::CWinSystemWin10()
   {
     CAESinkWASAPI::Register();
   }
-  CPowerSyscall::Register();
 }
 
 CWinSystemWin10::~CWinSystemWin10()
@@ -384,7 +382,7 @@ void CWinSystemWin10::UpdateResolutions()
 
   RESOLUTION_INFO& primary_info = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
   UpdateDesktopResolution(primary_info, "Default", w, h, refreshRate, dwFlags);
-  CLog::Log(LOGNOTICE, "Primary mode: %s", primary_info.strMode.c_str());
+  CLog::Log(LOGINFO, "Primary mode: %s", primary_info.strMode.c_str());
 
   // erase previous stored modes
   CDisplaySettings::GetInstance().ClearCustomResolutions();
@@ -412,7 +410,8 @@ void CWinSystemWin10::UpdateResolutions()
         GetGfxContext().ResetOverscan(res);
 
         if (AddResolution(res))
-          CLog::Log(LOGNOTICE, "Additional mode: %s %s", res.strMode.c_str(), mode.Is2086MetadataSupported() ? "(HDR)" : "");
+          CLog::Log(LOGINFO, "Additional mode: %s %s", res.strMode.c_str(),
+                    mode.Is2086MetadataSupported() ? "(HDR)" : "");
       }
     }
   }

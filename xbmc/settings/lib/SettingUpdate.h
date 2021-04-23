@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "utils/logtypes.h"
+
 #include <string>
 
 class TiXmlNode;
@@ -21,7 +23,7 @@ enum class SettingUpdateType {
 class CSettingUpdate
 {
 public:
-  CSettingUpdate() = default;
+  CSettingUpdate();
   virtual ~CSettingUpdate() = default;
 
   inline bool operator<(const CSettingUpdate& rhs) const
@@ -39,4 +41,6 @@ private:
 
   SettingUpdateType m_type = SettingUpdateType::Unknown;
   std::string m_value;
+
+  static Logger s_logger;
 };

@@ -18,9 +18,9 @@ if(OPENGL_FOUND)
   list(APPEND HEADERS RPRendererOpenGL.h)
 endif()
 
-if(CORE_PLATFORM_NAME_LC STREQUAL gbm AND OPENGLES_FOUND)
-  list(APPEND SOURCES RPRendererGBM.cpp)
-  list(APPEND HEADERS RPRendererGBM.h)
+if(("gbm" IN_LIST CORE_PLATFORM_NAME_LC OR "wayland" IN_LIST CORE_PLATFORM_NAME_LC) AND EGL_FOUND)
+  list(APPEND SOURCES RPRendererDMA.cpp)
+  list(APPEND HEADERS RPRendererDMA.h)
 endif()
 
 core_add_library(rp-videorenderers)

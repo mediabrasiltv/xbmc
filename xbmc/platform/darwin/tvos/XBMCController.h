@@ -24,8 +24,7 @@ class CFileItem;
 @interface XBMCController : UIViewController
 {
   BOOL m_isPlayingBeforeInactive;
-  UIBackgroundTaskIdentifier m_bgTask;
-  BOOL m_bgTaskActive;
+  UIBackgroundTaskIdentifier m_enterBackgroundTaskId;
   bool m_nativeKeyboardActive;
   BOOL m_pause;
   BOOL m_animating;
@@ -48,15 +47,14 @@ class CFileItem;
 
 - (void)enterBackground;
 - (void)enterForeground;
-- (void)becomeInactive;
 - (void)setFramebuffer;
 - (bool)presentFramebuffer;
 - (void)activateKeyboard:(UIView*)view;
 - (void)deactivateKeyboard:(UIView*)view;
 - (void)nativeKeyboardActive:(bool)active;
 
-- (UIBackgroundTaskIdentifier)enableBackGroundTask;
-- (void)disableBackGroundTask:(UIBackgroundTaskIdentifier)bgTaskID;
+- (void)beginEnterBackgroundTask;
+- (void)endEnterBackgroundTask;
 
 - (void)disableScreenSaver;
 - (void)enableScreenSaver;

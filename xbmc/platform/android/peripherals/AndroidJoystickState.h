@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "addons/kodi-addon-dev-kit/include/kodi/addon-instance/PeripheralUtils.h"
+#include "addons/kodi-dev-kit/include/kodi/addon-instance/peripheral/PeripheralUtils.h"
 #include "threads/CriticalSection.h"
 
 #include <string>
@@ -23,8 +23,8 @@ namespace PERIPHERALS
   class CAndroidJoystickState
   {
   public:
-    CAndroidJoystickState();
-    CAndroidJoystickState(CAndroidJoystickState &&other);
+    CAndroidJoystickState() = default;
+    CAndroidJoystickState(CAndroidJoystickState&& other) noexcept;
     virtual ~CAndroidJoystickState();
 
     int GetDeviceId() const { return m_deviceId; }
@@ -82,7 +82,7 @@ namespace PERIPHERALS
     static bool ContainsAxis(int axisId, const JoystickAxes& axes);
     static bool GetAxesIndex(const std::vector<int>& axisIds, const JoystickAxes& axes, size_t& axesIndex);
 
-    int m_deviceId;
+    int m_deviceId = -1;
 
     JoystickAxes m_buttons;
     JoystickAxes m_axes;

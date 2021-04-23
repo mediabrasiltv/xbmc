@@ -11,7 +11,7 @@
 #include "DVDCodecs/Overlay/DVDOverlayText.h"
 #include "DVDStreamInfo.h"
 #include "DVDSubtitleTagSami.h"
-#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
@@ -35,7 +35,7 @@ bool CDVDSubtitleParserSami::Open(CDVDStreamInfo &hints)
   char line[1024];
 
   CRegExp reg(true);
-  if (!reg.RegComp("<SYNC START=([0-9]+)>"))
+  if (!reg.RegComp("<SYNC START=\"?([0-9]+)\"?>"))
     return false;
 
   std::string strFileName;

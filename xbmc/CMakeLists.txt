@@ -61,10 +61,12 @@ set(HEADERS AppParamParser.h
             GUILargeTextureManager.h
             GUIPassword.h
             GUIUserMessages.h
+            HDRStatus.h
             IFileItemListModifier.h
             IProgressCallback.h
             InfoScanner.h
             LangInfo.h
+            LockType.h
             MediaSource.h
             NfoFile.h
             PartyModeManager.h
@@ -84,6 +86,7 @@ set(HEADERS AppParamParser.h
             XBApplicationEx.h
             XBDateTime.h
             system.h
+            system_egl.h
             system_gl.h)
 
 if(ENABLE_OPTICAL)

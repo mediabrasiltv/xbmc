@@ -48,7 +48,7 @@ bool CShader::LoadSource(const std::string& filename, const std::string& prefix)
   size_t versionPos = m_source.find("#version");
   if (versionPos != std::string::npos)
   {
-    versionPos = m_source.find("\n", versionPos);
+    versionPos = m_source.find('\n', versionPos);
     if (versionPos != std::string::npos)
       pos = versionPos + 1;
   }
@@ -191,7 +191,7 @@ bool CGLSLPixelShader::Compile()
   // Pixel shaders are not mandatory.
   if (m_source.length()==0)
   {
-    CLog::Log(LOGNOTICE, "GL: No pixel shader, fixed pipeline in use");
+    CLog::Log(LOGINFO, "GL: No pixel shader, fixed pipeline in use");
     return true;
   }
 

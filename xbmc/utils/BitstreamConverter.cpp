@@ -258,8 +258,6 @@ static bool has_sei_recovery_point(const uint8_t *p, const uint8_t *end)
 /////////////////////////////////////////////////////////////////////////////////////////////
 CBitstreamParser::CBitstreamParser() = default;
 
-CBitstreamParser::~CBitstreamParser() = default;
-
 void CBitstreamParser::Close()
 {
 }
@@ -389,7 +387,7 @@ bool CBitstreamConverter::Open(enum AVCodecID codec, uint8_t *in_extradata, int 
           }
           else
           {
-            CLog::Log(LOGNOTICE, "CBitstreamConverter::Open invalid avcC atom data");
+            CLog::Log(LOGINFO, "CBitstreamConverter::Open invalid avcC atom data");
             return false;
           }
         }
@@ -459,7 +457,7 @@ bool CBitstreamConverter::Open(enum AVCodecID codec, uint8_t *in_extradata, int 
           }
           else
           {
-            CLog::Log(LOGNOTICE, "CBitstreamConverter::Open invalid hvcC atom data");
+            CLog::Log(LOGINFO, "CBitstreamConverter::Open invalid hvcC atom data");
             return false;
           }
         }
@@ -834,7 +832,8 @@ bool CBitstreamConverter::IsIDR(uint8_t unit_type)
       return unit_type == AVC_NAL_IDR_SLICE;
     case AV_CODEC_ID_HEVC:
       return unit_type == HEVC_NAL_IDR_W_RADL ||
-             unit_type == HEVC_NAL_IDR_N_LP;
+             unit_type == HEVC_NAL_IDR_N_LP ||
+             unit_type == HEVC_NAL_CRA_NUT;
     default:
       return false;
   }

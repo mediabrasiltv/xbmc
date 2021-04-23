@@ -214,13 +214,15 @@ JSONRPC_STATUS CJSONRPC::SetConfiguration(const std::string &method, ITransportL
 JSONRPC_STATUS CJSONRPC::NotifyAll(const std::string &method, ITransportLayer *transport, IClient *client, const CVariant& parameterObject, CVariant &result)
 {
   if (parameterObject["data"].isNull())
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Other, parameterObject["sender"].asString().c_str(),
-      parameterObject["message"].asString().c_str());
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Other,
+                                                       parameterObject["sender"].asString(),
+                                                       parameterObject["message"].asString());
   else
   {
     CVariant data = parameterObject["data"];
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Other, parameterObject["sender"].asString().c_str(),
-      parameterObject["message"].asString().c_str(), data);
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Other,
+                                                       parameterObject["sender"].asString(),
+                                                       parameterObject["message"].asString(), data);
   }
 
   return ACK;
@@ -239,7 +241,7 @@ std::string CJSONRPC::MethodCall(const std::string &inputString, ITransportLayer
     {
       if (inputroot.size() <= 0)
       {
-        CLog::Log(LOGERROR, "JSONRPC: Empty batch call\n");
+        CLog::Log(LOGERROR, "JSONRPC: Empty batch call");
         BuildResponse(inputroot, InvalidRequest, CVariant(), outputroot);
         hasResponse = true;
       }
@@ -261,7 +263,7 @@ std::string CJSONRPC::MethodCall(const std::string &inputString, ITransportLayer
   }
   else
   {
-    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'\n", inputString.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'", inputString.c_str());
     BuildResponse(inputroot, ParseError, CVariant(), outputroot);
     hasResponse = true;
   }
@@ -299,7 +301,7 @@ bool CJSONRPC::HandleMethodCall(const CVariant& request, CVariant& response, ITr
     std::string str;
     CJSONVariantWriter::Write(request, str, true);
 
-    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'\n", str.c_str());
+    CLog::Log(LOGERROR, "JSONRPC: Failed to parse '%s'", str.c_str());
     errorCode = InvalidRequest;
   }
 

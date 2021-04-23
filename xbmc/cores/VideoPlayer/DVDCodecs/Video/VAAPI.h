@@ -9,20 +9,24 @@
 #pragma once
 
 #include "DVDVideoCodec.h"
-#include "cores/VideoPlayer/Process/VideoBuffer.h"
+#include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "cores/VideoSettings.h"
 #include "threads/CriticalSection.h"
-#include "threads/SharedSection.h"
 #include "threads/Event.h"
+#include "threads/SharedSection.h"
 #include "threads/Thread.h"
 #include "utils/ActorProtocol.h"
 #include "utils/Geometry.h"
+
+#include "platform/linux/sse4/DllLibSSE4.h"
+
 #include <list>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
+
 #include <va/va.h>
-#include "platform/linux/sse4/DllLibSSE4.h"
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -187,7 +191,8 @@ public:
 class COutputControlProtocol : public Protocol
 {
 public:
-  COutputControlProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Protocol(name, inEvent, outEvent) {};
+  COutputControlProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     INIT,
@@ -206,7 +211,8 @@ public:
 class COutputDataProtocol : public Protocol
 {
 public:
-  COutputDataProtocol(std::string name, CEvent* inEvent, CEvent *outEvent) : Protocol(name, inEvent, outEvent) {};
+  COutputDataProtocol(std::string name, CEvent* inEvent, CEvent* outEvent)
+    : Protocol(std::move(name), inEvent, outEvent){};
   enum OutSignal
   {
     NEWFRAME = 0,

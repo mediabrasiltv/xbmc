@@ -7,25 +7,27 @@
  */
 
 #include "VAAPI.h"
-#include "ServiceBroker.h"
+
 #include "DVDVideoCodec.h"
+#include "ServiceBroker.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecUtils.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDFactoryCodec.h"
-#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "cores/VideoPlayer/Process/ProcessInfo.h"
-#include "utils/log.h"
-#include "utils/StringUtils.h"
-#include "threads/SingleLock.h"
+#include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/Setting.h"
+#include "threads/SingleLock.h"
+#include "utils/MemUtils.h"
+#include "utils/StringUtils.h"
+#include "utils/XTimeUtils.h"
+#include "utils/log.h"
 #include "windowing/GraphicContext.h"
-#include "settings/AdvancedSettings.h"
+
+#include <drm_fourcc.h>
 #include <va/va_drm.h>
 #include <va/va_drmcommon.h>
-#include <drm_fourcc.h>
-#include "platform/posix/XTimeUtils.h"
-#include "utils/MemUtils.h"
 
 extern "C" {
 #include <libavutil/avutil.h>
@@ -36,11 +38,11 @@ extern "C" {
 #include <libavfilter/buffersrc.h>
 }
 
+#include "system_egl.h"
+
+#include <EGL/eglext.h>
 #include <va/va_vpp.h>
 #include <xf86drm.h>
-
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
 
 #if VA_CHECK_VERSION(1, 0, 0)
 # include <va/va_str.h>
@@ -49,23 +51,25 @@ extern "C" {
 using namespace VAAPI;
 #define NUM_RENDER_PICS 7
 
-const std::string SETTING_VIDEOPLAYER_USEVAAPI = "videoplayer.usevaapi";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIHEVC = "videoplayer.usevaapihevc";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIMPEG2 = "videoplayer.usevaapimpeg2";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIMPEG4 = "videoplayer.usevaapimpeg4";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIVC1 = "videoplayer.usevaapivc1";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIVP8 = "videoplayer.usevaapivp8";
-const std::string SETTING_VIDEOPLAYER_USEVAAPIVP9 = "videoplayer.usevaapivp9";
-const std::string SETTING_VIDEOPLAYER_PREFERVAAPIRENDER = "videoplayer.prefervaapirender";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPI = "videoplayer.usevaapi";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIHEVC = "videoplayer.usevaapihevc";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIMPEG2 = "videoplayer.usevaapimpeg2";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIMPEG4 = "videoplayer.usevaapimpeg4";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIVC1 = "videoplayer.usevaapivc1";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIVP8 = "videoplayer.usevaapivp8";
+constexpr auto SETTING_VIDEOPLAYER_USEVAAPIVP9 = "videoplayer.usevaapivp9";
+constexpr auto SETTING_VIDEOPLAYER_PREFERVAAPIRENDER = "videoplayer.prefervaapirender";
 
 void VAAPI::VaErrorCallback(void *user_context, const char *message)
 {
-  CLog::Log(LOGERROR, "libva error: {}", message);
+  std::string str{message};
+  CLog::Log(LOGERROR, "libva error: {}", StringUtils::TrimRight(str));
 }
 
 void VAAPI::VaInfoCallback(void *user_context, const char *message)
 {
-  CLog::Log(LOGDEBUG, "libva info: {}", message);
+  std::string str{message};
+  CLog::Log(LOGDEBUG, "libva info: {}", StringUtils::TrimRight(str));
 }
 
 //-----------------------------------------------------------------------------
@@ -101,7 +105,7 @@ void CVAAPIContext::Release(CDecoder *decoder)
 
 void CVAAPIContext::Close()
 {
-  CLog::Log(LOGNOTICE, "VAAPI::Close - closing decoder context");
+  CLog::Log(LOGINFO, "VAAPI::Close - closing decoder context");
   if (m_renderNodeFD >= 0)
   {
     close(m_renderNodeFD);
@@ -539,8 +543,22 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
   auto entry = settings_map.find(avctx->codec_id);
   if (entry != settings_map.end())
   {
-    const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-    bool enabled = settings->GetBool(entry->second) && settings->GetSetting(entry->second)->IsVisible();
+    auto settingsComponent = CServiceBroker::GetSettingsComponent();
+    if (!settingsComponent)
+      return false;
+
+    auto settings = settingsComponent->GetSettings();
+    if (!settings)
+      return false;
+
+    auto setting = settings->GetSetting(entry->second);
+    if (!setting)
+    {
+      CLog::Log(LOGERROR, "Failed to load setting for: {}", entry->second);
+      return false;
+    }
+
+    bool enabled = settings->GetBool(entry->second) && setting->IsVisible();
     if (!enabled)
       return false;
   }
@@ -717,7 +735,7 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
 
 void CDecoder::Close()
 {
-  CLog::Log(LOGNOTICE, "VAAPI::%s", __FUNCTION__);
+  CLog::Log(LOGINFO, "VAAPI::%s", __FUNCTION__);
 
   CSingleLock lock(m_DecoderSection);
 
@@ -1004,7 +1022,7 @@ CDVDVideoCodec::VCReturn CDecoder::Check(AVCodecContext* avctx)
   {
     // if there is no other error, sleep for a short while
     // in order not to drain player's message queue
-    Sleep(10);
+    KODI::TIME::Sleep(10);
 
     return CDVDVideoCodec::VC_NOBUFFER;
   }
@@ -1225,14 +1243,31 @@ void CDecoder::Register(IVaapiWinSystem *winSystem, bool deepColor)
   CDVDFactoryCodec::RegisterHWAccel("vaapi", CDecoder::Create);
   config.context->Release(nullptr);
 
-  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPI)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIMPEG4)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIVC1)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIMPEG2)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIVP8)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIVP9)->SetVisible(true);
-  settings->GetSetting(SETTING_VIDEOPLAYER_USEVAAPIHEVC)->SetVisible(true);
+  auto settingsComponent = CServiceBroker::GetSettingsComponent();
+  if (!settingsComponent)
+    return;
+
+  auto settings = settingsComponent->GetSettings();
+  if (!settings)
+    return;
+
+  constexpr std::array<const char*, 8> vaapiSettings = {
+      SETTING_VIDEOPLAYER_USEVAAPI,     SETTING_VIDEOPLAYER_USEVAAPIMPEG4,
+      SETTING_VIDEOPLAYER_USEVAAPIVC1,  SETTING_VIDEOPLAYER_USEVAAPIMPEG2,
+      SETTING_VIDEOPLAYER_USEVAAPIVP8,  SETTING_VIDEOPLAYER_USEVAAPIVP9,
+      SETTING_VIDEOPLAYER_USEVAAPIHEVC, SETTING_VIDEOPLAYER_PREFERVAAPIRENDER};
+
+  for (const auto vaapiSetting : vaapiSettings)
+  {
+    auto setting = settings->GetSetting(vaapiSetting);
+    if (!setting)
+    {
+      CLog::Log(LOGERROR, "Failed to load setting for: {}", vaapiSetting);
+      continue;
+    }
+
+    setting->SetVisible(true);
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -1456,12 +1491,12 @@ void COutput::Dispose()
 
 void COutput::OnStartup()
 {
-  CLog::Log(LOGNOTICE, "COutput::OnStartup: Output Thread created");
+  CLog::Log(LOGINFO, "COutput::OnStartup: Output Thread created");
 }
 
 void COutput::OnExit()
 {
-  CLog::Log(LOGNOTICE, "COutput::OnExit: Output Thread terminated");
+  CLog::Log(LOGINFO, "COutput::OnExit: Output Thread terminated");
 }
 
 enum OUTPUT_STATES

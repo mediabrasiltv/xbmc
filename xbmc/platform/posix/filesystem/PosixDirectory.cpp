@@ -14,8 +14,7 @@
 #include "utils/CharsetConverter.h"
 #include "utils/StringUtils.h"
 #include "utils/URIUtils.h"
-
-#include "platform/posix/XTimeUtils.h"
+#include "utils/XTimeUtils.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -80,9 +79,9 @@ bool CPosixDirectory::GetDirectory(const CURL& url, CFileItemList &items)
     {
       if (bStat || stat(pItem->GetPath().c_str(), &buffer) == 0)
       {
-        FILETIME fileTime, localTime;
-        TimeTToFileTime(buffer.st_mtime, &fileTime);
-        FileTimeToLocalFileTime(&fileTime, &localTime);
+        KODI::TIME::FileTime fileTime, localTime;
+        KODI::TIME::TimeTToFileTime(buffer.st_mtime, &fileTime);
+        KODI::TIME::FileTimeToLocalFileTime(&fileTime, &localTime);
         pItem->m_dateTime = localTime;
 
         if (!pItem->m_bIsFolder)
@@ -103,7 +102,7 @@ bool CPosixDirectory::Create(const CURL& url)
   return true;
 }
 
-bool CPosixDirectory::Create(std::string path)
+bool CPosixDirectory::Create(const std::string& path)
 {
   if (mkdir(path.c_str(), 0755) != 0)
   {

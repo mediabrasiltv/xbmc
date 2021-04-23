@@ -95,6 +95,7 @@ namespace XBMCAddon
         0,
         true,
         false);
+      pGUIControl->SetVisible(m_visible);
 
       CGUIMessage msg(GUI_MSG_LABEL_RESET, iParentId, iControlId);
       pGUIControl->OnMessage(msg);
@@ -129,17 +130,25 @@ namespace XBMCAddon
 
     void ControlTextBox::setText(const String& text)
     {
-      // create message
-      CGUIMessage msg(GUI_MSG_LABEL_SET, iParentId, iControlId);
-      msg.SetLabel(text);
+      if (pGUIControl)
+      {
+        // create message
+        CGUIMessage msg(GUI_MSG_LABEL_SET, iParentId, iControlId);
+        msg.SetLabel(text);
 
-      // send message
-      CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, iParentId);
+        // send message
+        CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, iParentId);
+      }
+      else
+      {
+        m_label = text;
+      }
     }
 
     String ControlTextBox::getText()
     {
-      if (!pGUIControl) return NULL;
+      if (pGUIControl == nullptr)
+        return m_label;
 
       XBMCAddonUtils::GuiLock lock(languageHook, false);
       return static_cast<CGUITextBox*>(pGUIControl)->GetDescription();
@@ -147,19 +156,25 @@ namespace XBMCAddon
 
     void ControlTextBox::reset()
     {
-      // create message
-      CGUIMessage msg(GUI_MSG_LABEL_RESET, iParentId, iControlId);
-      CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, iParentId);
+      if (pGUIControl)
+      {
+        // create message
+        CGUIMessage msg(GUI_MSG_LABEL_RESET, iParentId, iControlId);
+        CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, iParentId);
+      }
+      m_label.clear();
     }
 
     void ControlTextBox::scroll(long position)
     {
-      static_cast<CGUITextBox*>(pGUIControl)->Scroll((int)position);
+      if (pGUIControl)
+        static_cast<CGUITextBox*>(pGUIControl)->Scroll((int)position);
     }
 
     void ControlTextBox::autoScroll(int delay, int time, int repeat)
     {
-      static_cast<CGUITextBox*>(pGUIControl)->SetAutoScrolling(delay, time, repeat);
+      if (pGUIControl)
+        static_cast<CGUITextBox*>(pGUIControl)->SetAutoScrolling(delay, time, repeat);
     }
 
     CGUIControl* ControlTextBox::Create()
@@ -172,9 +187,11 @@ namespace XBMCAddon
       pGUIControl = new CGUITextBox(iParentId, iControlId,
            (float)dwPosX, (float)dwPosY, (float)dwWidth, (float)dwHeight,
            label);
+      pGUIControl->SetVisible(m_visible);
 
-      // reset textbox
-      CGUIMessage msg(GUI_MSG_LABEL_RESET, iParentId, iControlId);
+      // set label
+      CGUIMessage msg(GUI_MSG_LABEL_SET, iParentId, iControlId);
+      msg.SetLabel(m_label);
       pGUIControl->OnMessage(msg);
 
       return pGUIControl;
@@ -252,7 +269,8 @@ namespace XBMCAddon
 
     String ControlButton::getLabel()
     {
-      if (!pGUIControl) return NULL;
+      if (pGUIControl == nullptr)
+        return strText;
 
       XBMCAddonUtils::GuiLock lock(languageHook, false);
       return static_cast<CGUIButtonControl*>(pGUIControl)->GetLabel();
@@ -260,7 +278,8 @@ namespace XBMCAddon
 
     String ControlButton::getLabel2()
     {
-      if (!pGUIControl) return NULL;
+      if (pGUIControl == nullptr)
+        return strText2;
 
       XBMCAddonUtils::GuiLock lock(languageHook, false);
       return static_cast<CGUIButtonControl*>(pGUIControl)->GetLabel2();
@@ -288,6 +307,7 @@ namespace XBMCAddon
         CTextureInfo(strTextureFocus),
         CTextureInfo(strTextureNoFocus),
         label);
+      pGUIControl->SetVisible(m_visible);
 
       CGUIButtonControl* pGuiButtonControl =
         static_cast<CGUIButtonControl*>(pGUIControl);
@@ -342,6 +362,7 @@ namespace XBMCAddon
       pGUIControl = new CGUIImage(iParentId, iControlId,
             (float)dwPosX, (float)dwPosY, (float)dwWidth, (float)dwHeight,
             CTextureInfo(strFileName));
+      pGUIControl->SetVisible(m_visible);
 
       if (pGUIControl && aspectRatio <= CAspectRatio::AR_KEEP)
         static_cast<CGUIImage*>(pGUIControl)->SetAspectRatio((CAspectRatio::ASPECT_RATIO)aspectRatio);
@@ -400,6 +421,7 @@ namespace XBMCAddon
          CTextureInfo(strTextureBg), CTextureInfo(strTextureLeft),
          CTextureInfo(strTextureMid), CTextureInfo(strTextureRight),
          CTextureInfo(strTextureOverlay));
+      pGUIControl->SetVisible(m_visible);
 
       if (pGUIControl && colorDiffuse)
         static_cast<CGUIProgressControl*>(pGUIControl)->SetColorDiffuse(GUILIB::GUIINFO::CGUIInfoColor(colorDiffuse));
@@ -504,6 +526,7 @@ namespace XBMCAddon
                                          (float) dwPosY,
                                          (float) dwWidth,
                                          (float) dwHeight);
+      pGUIControl->SetVisible(m_visible);
       return pGUIControl;
     }
 
@@ -514,7 +537,7 @@ namespace XBMCAddon
     ControlRadioButton::ControlRadioButton(long x, long y, long width, long height, const String& label,
                                            const char* focusOnTexture,  const char* noFocusOnTexture,
                                            const char* focusOffTexture, const char* noFocusOffTexture,
-                                           const char* focusTexture,    const char* noFocusTexture,
+                                           const char* focusTexture, const char* noFocusTexture,
                                            long _textOffsetX, long _textOffsetY,
                                            long alignment, const char* font, const char* _textColor,
                                            const char* _disabledColor, long angle,
@@ -544,8 +567,10 @@ namespace XBMCAddon
       }
       else
       {
-        strTextureRadioOnFocus = strTextureRadioOnNoFocus = focusTexture ? focusTexture :
-          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradiofocus");
+        strTextureRadioOnFocus =
+          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradioonfocus");
+        strTextureRadioOnNoFocus =
+          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradioonnofocus");
       }
 
       if (focusOffTexture && noFocusOffTexture)
@@ -555,8 +580,10 @@ namespace XBMCAddon
       }
       else
       {
-        strTextureRadioOffFocus = strTextureRadioOffNoFocus = noFocusTexture ? noFocusTexture :
-          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradiofocus");
+        strTextureRadioOffFocus =
+          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradioofffocus");
+        strTextureRadioOffNoFocus =
+          XBMCAddonUtils::getDefaultImage("radiobutton", "textureradiooffnofocus");
       }
 
       if (font) strFont = font;
@@ -651,6 +678,7 @@ namespace XBMCAddon
         CTextureInfo(strTextureRadioOffNoFocus),
         CTextureInfo(strTextureRadioOnDisabled),
         CTextureInfo(strTextureRadioOffDisabled));
+      pGUIControl->SetVisible(m_visible);
 
       CGUIRadioButtonControl* pGuiButtonControl =
         static_cast<CGUIRadioButtonControl*>(pGUIControl);
@@ -691,8 +719,14 @@ namespace XBMCAddon
     {
       DelayedCallGuard dcguard(languageHook);
       XBMCAddonUtils::GuiLock lock(languageHook, false);
-      if (pGUIControl)
+      if (pGUIControl != nullptr)
+      {
         pGUIControl->SetVisible(visible);
+      }
+      else
+      {
+        m_visible = visible;
+      }
     }
 
     bool Control::isVisible()
@@ -954,6 +988,7 @@ namespace XBMCAddon
         label,
         false,
         bHasPath);
+      pGUIControl->SetVisible(m_visible);
       static_cast<CGUILabelControl*>(pGUIControl)->SetLabel(strText);
       return pGUIControl;
     }
@@ -971,8 +1006,6 @@ namespace XBMCAddon
 
     String ControlLabel::getLabel()
     {
-      if (!pGUIControl)
-        return NULL;
       return strText;
     }
     // ============================================================
@@ -984,9 +1017,9 @@ namespace XBMCAddon
                              const char* font, const char* _textColor,
                              const char* _disabledColor,
                              long _alignment, const char* focusTexture,
-                             const char* noFocusTexture, bool isPassword) :
+                             const char* noFocusTexture) :
       strFont("font13"), textColor(0xffffffff), disabledColor(0x60ffffff),
-      align(_alignment), bIsPassword(isPassword)
+      align(_alignment)
 
     {
       strTextureFocus = focusTexture ? focusTexture :
@@ -995,6 +1028,10 @@ namespace XBMCAddon
       strTextureNoFocus = noFocusTexture ? noFocusTexture :
         XBMCAddonUtils::getDefaultImage("edit", "texturenofocus");
 
+      if (!label.empty())
+      {
+        strText = label;
+      }
       if (font) strFont = font;
       if (_textColor) sscanf( _textColor, "%x", &textColor );
       if (_disabledColor) sscanf( _disabledColor, "%x", &disabledColor );
@@ -1018,9 +1055,13 @@ namespace XBMCAddon
         CTextureInfo(strTextureNoFocus),
         label,
         strText);
+      pGUIControl->SetVisible(m_visible);
 
-      if (bIsPassword)
-        static_cast<CGUIEditControl*>(pGUIControl)->SetInputType(CGUIEditControl::INPUT_TYPE_PASSWORD, 0);
+      // set label
+      CGUIMessage msg(GUI_MSG_LABEL_SET, iParentId, iControlId);
+      msg.SetLabel(strText);
+      CServiceBroker::GetGUI()->GetWindowManager().SendThreadMessage(msg, iParentId);
+
       return pGUIControl;
     }
 
@@ -1037,8 +1078,6 @@ namespace XBMCAddon
 
     String ControlEdit::getLabel()
     {
-      if (!pGUIControl)
-        return NULL;
       return strText;
     }
 
@@ -1145,7 +1184,7 @@ namespace XBMCAddon
         (float)itemHeight,
         (float)imageWidth, (float)imageHeight,
         (float)space);
-
+      pGUIControl->SetVisible(m_visible);
       return pGUIControl;
     }
 
@@ -1168,7 +1207,8 @@ namespace XBMCAddon
       sendLabelBind(vecItems.size());
     }
 
-    void ControlList::internAddListItem(AddonClass::Ref<ListItem> pListItem, bool sendMessage)
+    void ControlList::internAddListItem(const AddonClass::Ref<ListItem>& pListItem,
+                                        bool sendMessage)
     {
       if (pListItem.isNull())
         throw WindowException("NULL ListItem passed to ControlList::addListItem");

@@ -18,12 +18,14 @@
 #include "utils/log.h"
 #include "video/VideoInfoTag.h"
 
+#include <utility>
+
 using namespace XFILE;
 
 CVideoTagLoaderNFO::CVideoTagLoaderNFO(const CFileItem& item,
                                        ADDON::ScraperPtr info,
                                        bool lookInFolder)
-  : IVideoInfoTagLoader(item, info, lookInFolder)
+  : IVideoInfoTagLoader(item, std::move(info), lookInFolder)
 {
   if (m_info && m_info->Content() == CONTENT_TVSHOWS && m_item.m_bIsFolder)
     m_path = URIUtils::AddFileToFolder(m_item.GetPath(), "tvshow.nfo");
@@ -95,7 +97,7 @@ std::string CVideoTagLoaderNFO::FindNFO(const CFileItem& item,
     if (URIUtils::IsInRAR(item.GetPath())) // we have a rarred item - we want to check outside the rars
     {
       CFileItem item2(item);
-      CURL url(m_item.GetPath());
+      CURL url(item.GetPath());
       std::string strPath = URIUtils::GetDirectory(url.GetHostName());
       item2.SetPath(URIUtils::AddFileToFolder(strPath,
                                             URIUtils::GetFileName(item.GetPath())));

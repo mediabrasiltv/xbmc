@@ -9,7 +9,7 @@
 #include "PVRRecording.h"
 
 #include "ServiceBroker.h"
-#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
+#include "addons/kodi-dev-kit/include/kodi/c-api/addon-instance/pvr/pvr_recordings.h"
 #include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClient.h"
@@ -94,6 +94,11 @@ CPVRRecording::CPVRRecording(const PVR_RECORDING& recording, unsigned int iClien
   m_bIsDeleted = recording.bIsDeleted;
   m_iEpgEventId = recording.iEpgEventId;
   m_iChannelUid = recording.iChannelUid;
+  if (strlen(recording.strFirstAired) > 0)
+    m_firstAired.SetFromW3CDateTime(recording.strFirstAired);
+  m_iFlags = recording.iFlags;
+  if (recording.sizeInBytes >= 0)
+    m_sizeInBytes = recording.sizeInBytes;
 
   SetGenre(recording.iGenreType, recording.iGenreSubType, recording.strGenreDescription);
   CVideoInfoTag::SetPlayCount(recording.iPlayCount);
@@ -134,6 +139,7 @@ CPVRRecording::CPVRRecording(const PVR_RECORDING& recording, unsigned int iClien
 
 bool CPVRRecording::operator ==(const CPVRRecording& right) const
 {
+  CSingleLock lock(m_critSection);
   return (this == &right) ||
       (m_strRecordingId == right.m_strRecordingId &&
        m_iClientId == right.m_iClientId &&
@@ -161,7 +167,10 @@ bool CPVRRecording::operator ==(const CPVRRecording& right) const
        m_bRadio == right.m_bRadio &&
        m_genre == right.m_genre &&
        m_iGenreType == right.m_iGenreType &&
-       m_iGenreSubType == right.m_iGenreSubType);
+       m_iGenreSubType == right.m_iGenreSubType &&
+       m_firstAired == right.m_firstAired &&
+       m_iFlags == right.m_iFlags &&
+       m_sizeInBytes == right.m_sizeInBytes);
 }
 
 bool CPVRRecording::operator !=(const CPVRRecording& right) const
@@ -192,6 +201,17 @@ void CPVRRecording::Serialize(CVariant& value) const
     value["art"]["thumb"] = m_strThumbnailPath;
   if (!m_strFanartPath.empty())
     value["art"]["fanart"] = m_strFanartPath;
+
+  value["clientid"] = m_iClientId;
+}
+
+void CPVRRecording::ToSortable(SortItem& sortable, Field field) const
+{
+  CSingleLock lock(m_critSection);
+  if (field == FieldSize)
+    sortable[FieldSize] = m_sizeInBytes;
+  else
+    CVideoInfoTag::ToSortable(sortable, field);
 }
 
 void CPVRRecording::Reset()
@@ -214,6 +234,11 @@ void CPVRRecording::Reset()
   m_iEpisode = -1;
   m_iChannelUid = PVR_CHANNEL_INVALID_UID;
   m_bRadio = false;
+  m_iFlags = PVR_RECORDING_FLAG_UNDEFINED;
+  {
+    CSingleLock lock(m_critSection);
+    m_sizeInBytes = 0;
+  }
 
   m_recordingTime.Reset();
   CVideoInfoTag::Reset();
@@ -309,17 +334,39 @@ CBookmark CPVRRecording::GetResumePoint() const
   return CVideoInfoTag::GetResumePoint();
 }
 
-void CPVRRecording::UpdateMetadata(CVideoDatabase& db)
+bool CPVRRecording::UpdateRecordingSize()
+{
+  const std::shared_ptr<CPVRClient> client = CServiceBroker::GetPVRManager().GetClient(m_iClientId);
+  if (client && client->GetClientCapabilities().SupportsRecordingsSize() &&
+      m_recordingSizeRefetchTimeout.IsTimePast())
+  {
+    // @todo: root cause should be fixed. details: https://github.com/xbmc/xbmc/pull/14961
+    m_recordingSizeRefetchTimeout.Set(10000); // update size from backend at most every 10 secs
+
+    int64_t sizeInBytes = -1;
+    client->GetRecordingSize(*this, sizeInBytes);
+
+    CSingleLock lock(m_critSection);
+    if (sizeInBytes >= 0 && sizeInBytes != m_sizeInBytes)
+    {
+      CSingleLock lock(m_critSection);
+      m_sizeInBytes = sizeInBytes;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void CPVRRecording::UpdateMetadata(CVideoDatabase& db, const CPVRClient& client)
 {
   if (m_bGotMetaData || !db.IsOpen())
     return;
 
-  const std::shared_ptr<CPVRClient> client = CServiceBroker::GetPVRManager().GetClient(m_iClientId);
-
-  if (!client || !client->GetClientCapabilities().SupportsRecordingsPlayCount())
+  if (!client.GetClientCapabilities().SupportsRecordingsPlayCount())
     CVideoInfoTag::SetPlayCount(db.GetPlayCount(m_strFileNameAndPath));
 
-  if (!client || !client->GetClientCapabilities().SupportsRecordingsLastPlayedPosition())
+  if (!client.GetClientCapabilities().SupportsRecordingsLastPlayedPosition())
   {
     CBookmark resumePoint;
     if (db.GetResumeBookMark(m_strFileNameAndPath, resumePoint))
@@ -340,7 +387,7 @@ std::vector<PVR_EDL_ENTRY> CPVRRecording::GetEdl() const
   return edls;
 }
 
-void CPVRRecording::Update(const CPVRRecording& tag)
+void CPVRRecording::Update(const CPVRRecording& tag, const CPVRClient& client)
 {
   m_strRecordingId = tag.m_strRecordingId;
   m_iClientId = tag.m_iClientId;
@@ -364,9 +411,19 @@ void CPVRRecording::Update(const CPVRRecording& tag)
   m_iEpgEventId = tag.m_iEpgEventId;
   m_iChannelUid = tag.m_iChannelUid;
   m_bRadio = tag.m_bRadio;
+  m_firstAired = tag.m_firstAired;
+  m_iFlags = tag.m_iFlags;
+  {
+    CSingleLock lock(m_critSection);
+    m_sizeInBytes = tag.m_sizeInBytes;
+  }
 
-  CVideoInfoTag::SetPlayCount(tag.GetLocalPlayCount());
-  CVideoInfoTag::SetResumePoint(tag.GetLocalResumePoint());
+  if (client.GetClientCapabilities().SupportsRecordingsPlayCount())
+    CVideoInfoTag::SetPlayCount(tag.GetLocalPlayCount());
+
+  if (client.GetClientCapabilities().SupportsRecordingsLastPlayedPosition())
+    CVideoInfoTag::SetResumePoint(tag.GetLocalResumePoint());
+
   SetDuration(tag.GetDuration());
 
   if (m_iGenreType == EPG_GENRE_USE_STRING || m_iGenreSubType == EPG_GENRE_USE_STRING)
@@ -521,4 +578,51 @@ void CPVRRecording::SetGenre(int iGenreType, int iGenreSubType, const std::strin
 const std::string CPVRRecording::GetGenresLabel() const
 {
   return StringUtils::Join(m_genre, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_videoItemSeparator);
+}
+
+CDateTime CPVRRecording::FirstAired() const
+{
+  return m_firstAired;
+}
+
+void CPVRRecording::SetYear(int year)
+{
+  if (year > 0)
+    m_premiered = CDateTime(year, 1, 1, 0, 0, 0);
+}
+
+int CPVRRecording::GetYear() const
+{
+  return m_premiered.GetYear();
+}
+
+bool CPVRRecording::HasYear() const
+{
+  return m_premiered.IsValid();
+}
+
+bool CPVRRecording::IsNew() const
+{
+  return (m_iFlags & PVR_RECORDING_FLAG_IS_NEW) > 0;
+}
+
+bool CPVRRecording::IsPremiere() const
+{
+  return (m_iFlags & PVR_RECORDING_FLAG_IS_PREMIERE) > 0;
+}
+
+bool CPVRRecording::IsLive() const
+{
+  return (m_iFlags & PVR_RECORDING_FLAG_IS_LIVE) > 0;
+}
+
+bool CPVRRecording::IsFinale() const
+{
+  return (m_iFlags & PVR_RECORDING_FLAG_IS_FINALE) > 0;
+}
+
+int64_t CPVRRecording::GetSizeInBytes() const
+{
+  CSingleLock lock(m_critSection);
+  return m_sizeInBytes;
 }

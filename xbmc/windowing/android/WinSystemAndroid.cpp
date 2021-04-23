@@ -24,6 +24,7 @@
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "system_egl.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
@@ -32,12 +33,10 @@
 #include "platform/android/activity/XBMCApp.h"
 #include "platform/android/media/decoderfilter/MediaCodecDecoderFilterManager.h"
 #include "platform/android/media/drm/MediaDrmCryptoSession.h"
-#include "platform/android/powermanagement/AndroidPowerSyscall.h"
 
 #include <float.h>
 #include <string.h>
 
-#include <EGL/egl.h>
 #include <EGL/eglplatform.h>
 
 using namespace KODI;
@@ -57,7 +56,6 @@ CWinSystemAndroid::CWinSystemAndroid()
   m_android = nullptr;
 
   m_winEvents.reset(new CWinEventsAndroid());
-  CAndroidPowerSyscall::Register();
 }
 
 CWinSystemAndroid::~CWinSystemAndroid()
@@ -94,7 +92,7 @@ bool CWinSystemAndroid::InitWindowSystem()
 
 bool CWinSystemAndroid::DestroyWindowSystem()
 {
-  CLog::Log(LOGNOTICE, "CWinSystemAndroid::%s", __FUNCTION__);
+  CLog::Log(LOGINFO, "CWinSystemAndroid::%s", __FUNCTION__);
 
   delete m_android;
   m_android = nullptr;
@@ -150,7 +148,7 @@ bool CWinSystemAndroid::CreateNewWindow(const std::string& name,
 
 bool CWinSystemAndroid::DestroyWindow()
 {
-  CLog::Log(LOGNOTICE, "CWinSystemAndroid::%s", __FUNCTION__);
+  CLog::Log(LOGINFO, "CWinSystemAndroid::%s", __FUNCTION__);
   m_nativeWindow = nullptr;
   m_bWindowCreated = false;
   return true;
@@ -211,6 +209,8 @@ void CWinSystemAndroid::UpdateResolutions(bool bUpdateDesktopRes)
       CDisplaySettings::GetInstance().GetResolutionInfo(RES_WINDOW) = res;
     }
   }
+
+  CDisplaySettings::GetInstance().ApplyCalibrations();
 }
 
 void CWinSystemAndroid::OnTimeout()

@@ -29,6 +29,7 @@
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
 #include "windowing/OSScreenSaver.h"
+#include "windowing/WindowSystemFactory.h"
 #import "windowing/tvos/OSScreenSaverTVOS.h"
 #import "windowing/tvos/VideoSyncTVos.h"
 #import "windowing/tvos/WinEventsTVOS.h"
@@ -72,10 +73,14 @@ struct CADisplayLinkWrapper
   TVOSDisplayLinkCallback* callbackClass;
 };
 
-std::unique_ptr<CWinSystemBase> CWinSystemBase::CreateWinSystem()
+void CWinSystemTVOS::Register()
 {
-  std::unique_ptr<CWinSystemBase> winSystem = std::make_unique<CWinSystemTVOS>();
-  return winSystem;
+  KODI::WINDOWING::CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem);
+}
+
+std::unique_ptr<CWinSystemBase> CWinSystemTVOS::CreateWinSystem()
+{
+  return std::make_unique<CWinSystemTVOS>();
 }
 
 void CWinSystemTVOS::MessagePush(XBMC_Event* newEvent)
@@ -282,7 +287,7 @@ void CWinSystemTVOS::FillInVideoModes(int screenIdx)
   {
     RESOLUTION_INFO res;
     UpdateDesktopResolution(res, CONST_HDMI, w, h, refreshrate, 0);
-    CLog::Log(LOGNOTICE, "Found possible resolution for display {} with {} x {} RefreshRate:{} \n",
+    CLog::Log(LOGINFO, "Found possible resolution for display {} with {} x {} RefreshRate:{} ",
               screenIdx, w, h, refreshrate);
 
     CServiceBroker::GetWinSystem()->GetGfxContext().ResetOverscan(res);

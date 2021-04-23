@@ -12,6 +12,7 @@
 #include "TextureCacheJob.h"
 #include "URL.h"
 #include "filesystem/File.h"
+#include "guilib/Texture.h"
 #include "profiles/ProfileManager.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/SettingsComponent.h"
@@ -125,7 +126,9 @@ void CTextureCache::BackgroundCacheImage(const std::string &url)
   AddJob(new CTextureCacheJob(path, details.hash));
 }
 
-std::string CTextureCache::CacheImage(const std::string &image, CBaseTexture **texture /* = NULL */, CTextureDetails *details /* = NULL */)
+std::string CTextureCache::CacheImage(const std::string& image,
+                                      CTexture** texture /* = NULL */,
+                                      CTextureDetails* details /* = NULL */)
 {
   std::string url = CTextureUtils::UnwrapImageURL(image);
   if (url.empty())
@@ -159,7 +162,20 @@ std::string CTextureCache::CacheImage(const std::string &image, CBaseTexture **t
   CTextureDetails tempDetails;
   if (!details)
     details = &tempDetails;
-  return GetCachedImage(url, *details, true);
+
+  std::string cachedpath = GetCachedImage(url, *details, true);
+  if (!cachedpath.empty())
+  {
+    if (texture)
+      *texture = CTexture::LoadFromFile(cachedpath, 0, 0);
+  }
+  else
+  {
+    CLog::Log(LOGDEBUG, "CTextureCache::%s - Return NULL texture because cache is not ready",
+              __FUNCTION__);
+  }
+
+  return cachedpath;
 }
 
 bool CTextureCache::CacheImage(const std::string &image, CTextureDetails &details)

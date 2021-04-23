@@ -12,7 +12,7 @@
 #include "IVideoPlayer.h"
 #include "addons/AddonProvider.h"
 #include "addons/binary-addons/AddonInstanceHandler.h"
-#include "addons/kodi-addon-dev-kit/include/kodi/addon-instance/Inputstream.h"
+#include "addons/kodi-dev-kit/include/kodi/addon-instance/Inputstream.h"
 
 #include <memory>
 #include <vector>
@@ -21,13 +21,15 @@ class CInputStreamProvider
   : public ADDON::IAddonProvider
 {
 public:
-  CInputStreamProvider(ADDON::BinaryAddonBasePtr addonBase, kodi::addon::IAddonInstance* parentInstance);
+  CInputStreamProvider(const ADDON::AddonInfoPtr& addonInfo, KODI_HANDLE parentInstance);
 
-  void getAddonInstance(INSTANCE_TYPE instance_type, ADDON::BinaryAddonBasePtr& addonBase, kodi::addon::IAddonInstance*& parentInstance) override;
+  void GetAddonInstance(INSTANCE_TYPE instance_type,
+                        ADDON::AddonInfoPtr& addonInfo,
+                        KODI_HANDLE& parentInstance) override;
 
 private:
-  ADDON::BinaryAddonBasePtr m_addonBase;
-  kodi::addon::IAddonInstance* m_parentInstance;
+  ADDON::AddonInfoPtr m_addonInfo;
+  KODI_HANDLE m_parentInstance;
 };
 
 //! \brief Input stream class
@@ -41,18 +43,21 @@ class CInputStreamAddon
   , public CDVDInputStream::IChapter
 {
 public:
-  CInputStreamAddon(ADDON::BinaryAddonBasePtr& addonBase, IVideoPlayer* player, const CFileItem& fileitem);
+  CInputStreamAddon(const ADDON::AddonInfoPtr& addonInfo,
+                    IVideoPlayer* player,
+                    const CFileItem& fileitem,
+                    const std::string& instanceId);
   ~CInputStreamAddon() override;
 
-  static bool Supports(ADDON::BinaryAddonBasePtr& addonBase, const CFileItem& fileitem);
+  static bool Supports(const ADDON::AddonInfoPtr& addonInfo, const CFileItem& fileitem);
 
   // CDVDInputStream
   bool Open() override;
   void Close() override;
   int Read(uint8_t* buf, int buf_size) override;
   int64_t Seek(int64_t offset, int whence) override;
-  bool Pause(double dTime) override;
   int64_t GetLength() override;
+  int GetBlockSize() override;
   bool IsEOF() override;
   bool CanSeek() override; //! @todo drop this
   bool CanPause() override;
@@ -119,7 +124,7 @@ private:
    * @param iDataSize The size of the data that will go into the packet
    * @return The allocated packet.
    */
-  static DemuxPacket* cb_allocate_demux_packet(void* kodiInstance, int iDataSize = 0);
+  static DEMUX_PACKET* cb_allocate_demux_packet(void* kodiInstance, int iDataSize = 0);
 
   /*!
   * @brief Allocate an encrypted demux packet. Free with FreeDemuxPacket
@@ -128,13 +133,30 @@ private:
   * @param encryptedSubsampleCount The number of subsample description blocks to allocate
   * @return The allocated packet.
   */
-  static DemuxPacket* cb_allocate_encrypted_demux_packet(void* kodiInstance, unsigned int dataSize, unsigned int encryptedSubsampleCount);
+  static DEMUX_PACKET* cb_allocate_encrypted_demux_packet(void* kodiInstance,
+                                                          unsigned int dataSize,
+                                                          unsigned int encryptedSubsampleCount);
 
   /*!
    * @brief Free a packet that was allocated with AllocateDemuxPacket
    * @param kodiInstance A pointer to the add-on.
    * @param pPacket The packet to free.
    */
-  static void cb_free_demux_packet(void* kodiInstance, DemuxPacket* pPacket);
+  static void cb_free_demux_packet(void* kodiInstance, DEMUX_PACKET* pPacket);
+
+  /*!
+   * @brief Callback used by @ref GetStream to get the data
+   *
+   * Used as callback to prevent memleaks as the temporary stack memory on addon
+   * can be used to give data to Kodi.
+   *
+   * @param[in] handle Pointer to identify this class
+   * @param[in] streamId The related stream Identifier
+   * @param[in] stream "C" structure with stream information
+   * @return The created demux stream packet
+   */
+  static KODI_HANDLE cb_get_stream_transfer(KODI_HANDLE handle,
+                                            int streamId,
+                                            INPUTSTREAM_INFO* stream);
   //@}
 };

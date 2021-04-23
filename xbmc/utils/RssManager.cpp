@@ -56,7 +56,7 @@ void CRssManager::OnSettingsUnloaded()
   Clear();
 }
 
-void CRssManager::OnSettingAction(std::shared_ptr<const CSetting> setting)
+void CRssManager::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -65,9 +65,11 @@ void CRssManager::OnSettingAction(std::shared_ptr<const CSetting> setting)
   if (settingId == CSettings::SETTING_LOOKANDFEEL_RSSEDIT)
   {
     ADDON::AddonPtr addon;
-    if (!CServiceBroker::GetAddonMgr().GetAddon("script.rss.editor", addon))
+    if (!CServiceBroker::GetAddonMgr().GetAddon("script.rss.editor", addon, ADDON::ADDON_UNKNOWN,
+                                                ADDON::OnlyEnabled::YES))
     {
-      if (!CAddonInstaller::GetInstance().InstallModal("script.rss.editor", addon))
+      if (!ADDON::CAddonInstaller::GetInstance().InstallModal("script.rss.editor", addon,
+                                                              ADDON::InstallModalPrompt::PROMPT))
         return;
     }
     CBuiltins::GetInstance().Execute("RunScript(script.rss.editor)");
@@ -123,7 +125,8 @@ bool CRssManager::Load()
     if (pSet->QueryIntAttribute("id", &iId) == TIXML_SUCCESS)
     {
       RssSet set;
-      set.rtl = pSet->Attribute("rtl") != NULL && strcasecmp(pSet->Attribute("rtl"), "true") == 0;
+      set.rtl = pSet->Attribute("rtl") != NULL &&
+                StringUtils::CompareNoCase(pSet->Attribute("rtl"), "true") == 0;
       const TiXmlElement* pFeed = pSet->FirstChildElement("feed");
       while (pFeed != NULL)
       {

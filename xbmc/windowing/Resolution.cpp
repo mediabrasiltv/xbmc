@@ -19,6 +19,20 @@
 #include "utils/log.h"
 
 #include <cstdlib>
+#include <limits>
+
+namespace
+{
+
+const char* SETTING_VIDEOSCREEN_WHITELIST_PULLDOWN{"videoscreen.whitelistpulldown"};
+const char* SETTING_VIDEOSCREEN_WHITELIST_DOUBLEREFRESHRATE{
+    "videoscreen.whitelistdoublerefreshrate"};
+
+} // namespace
+
+EdgeInsets::EdgeInsets(float l, float t, float r, float b) : left(l), top(t), right(r), bottom(b)
+{
+}
 
 RESOLUTION_INFO::RESOLUTION_INFO(int width, int height, float aspect, const std::string &mode) :
   strMode(mode)
@@ -34,11 +48,12 @@ RESOLUTION_INFO::RESOLUTION_INFO(int width, int height, float aspect, const std:
   dwFlags = iSubtitles = 0;
 }
 
-RESOLUTION_INFO::RESOLUTION_INFO(const RESOLUTION_INFO& res) :
-  Overscan(res.Overscan),
-  strMode(res.strMode),
-  strOutput(res.strOutput),
-  strId(res.strId)
+RESOLUTION_INFO::RESOLUTION_INFO(const RESOLUTION_INFO& res)
+  : Overscan(res.Overscan),
+    guiInsets(res.guiInsets),
+    strMode(res.strMode),
+    strOutput(res.strOutput),
+    strId(res.strId)
 {
   bFullScreen = res.bFullScreen;
   iWidth = res.iWidth; iHeight = res.iHeight;
@@ -66,21 +81,27 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int heig
     }
   }
 
-  CLog::Log(LOGNOTICE, "Display resolution ADJUST : %s (%d) (weight: %.3f)",
-            CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(res).strMode.c_str(), res, weight);
+  CLog::Log(LOGINFO, "Display resolution ADJUST : %s (%d) (weight: %.3f)",
+            CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(res).strMode.c_str(), res,
+            weight);
   return res;
 }
 
 void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int height, bool is3D, RESOLUTION &resolution)
 {
   RESOLUTION_INFO curr = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
-  CLog::Log(LOGNOTICE, "Whitelist search for: width: %d, height: %d, fps: %0.3f, 3D: %s",
-    width, height, fps, is3D ? "true" : "false");
+  CLog::Log(LOGINFO,
+            "[WHITELIST] Searching the whitelist for: width: {}, height: {}, fps: {:0.3f}, 3D: {}",
+            width, height, fps, is3D ? "true" : "false");
 
   std::vector<CVariant> indexList = CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(CSettings::SETTING_VIDEOSCREEN_WHITELIST);
-  if (indexList.empty())
+
+  bool noWhiteList = indexList.empty();
+
+  if (noWhiteList)
   {
-    CLog::Log(LOGDEBUG, "Whitelist is empty using default one");
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] Using the default whitelist because the user whitelist is empty");
     std::vector<RESOLUTION> candidates;
     RESOLUTION_INFO info;
     std::string resString;
@@ -104,7 +125,10 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     }
   }
 
-  CLog::Log(LOGDEBUG, "Trying to find exact refresh rate");
+  CLog::Log(LOGDEBUG, "[WHITELIST] Searching for an exact resolution with an exact refresh rate");
+
+  unsigned int penalty = std::numeric_limits<unsigned int>::max();
+  bool found = false;
 
   for (const auto& mode : indexList)
   {
@@ -118,64 +142,100 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
         (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
         MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
     {
-      CLog::Log(LOGDEBUG, "Matched exact whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
-      resolution = i;
-      return;
+      CLog::Log(LOGDEBUG,
+                "[WHITELIST] Matched an exact resolution with an exact refresh rate {} ({})",
+                info.strMode, i);
+      unsigned int pen = abs(info.iScreenHeight - height) + abs(info.iScreenWidth - width);
+      if (pen < penalty)
+      {
+        resolution = i;
+        found = true;
+        penalty = pen;
+      }
     }
   }
 
-  CLog::Log(LOGDEBUG, "No exact whitelisted resolution matched, trying double refresh rate");
+  if (!found)
+    CLog::Log(LOGDEBUG, "[WHITELIST] No match for an exact resolution with an exact refresh rate");
 
-  for (const auto& mode : indexList)
+  if (noWhiteList || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          SETTING_VIDEOSCREEN_WHITELIST_DOUBLEREFRESHRATE))
   {
-    auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] Searching for an exact resolution with double the refresh rate");
 
-    // allow resolutions that are exact and have double the refresh rate
-    // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
-    if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-         (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
-        (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
-        MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
+    for (const auto& mode : indexList)
     {
-      CLog::Log(LOGDEBUG, "Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
-      resolution = i;
-      return;
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+
+      // allow resolutions that are exact and have double the refresh rate
+      // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
+      if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
+           (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
+          (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
+          MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
+      {
+        CLog::Log(LOGDEBUG,
+                  "[WHITELIST] Matched an exact resolution with double the refresh rate {} ({})",
+                  info.strMode, i);
+        unsigned int pen = abs(info.iScreenHeight - height) + abs(info.iScreenWidth - width);
+        if (pen < penalty)
+        {
+          resolution = i;
+          found = true;
+          penalty = pen;
+        }
+      }
     }
-  }
-
-  CLog::Log(LOGDEBUG, "No double whitelisted resolution matched, trying 3:2 pullback");
-
-  for (const auto& mode : indexList)
-  {
-    auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
-
-    // allow resolutions that are exact and have 2.5 times the refresh rate
-    // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
-    if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
-         (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
-        (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
-        MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
-    {
-      CLog::Log(LOGDEBUG, "Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
-      resolution = i;
+    if (found)
       return;
-    }
+
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] No match for an exact resolution with double the refresh rate");
   }
-
-  CLog::Log(LOGDEBUG, "No 3:2 pullback refresh rate whitelisted resolution matched, trying current resolution");
-
-  if (width <= curr.iScreenWidth
-    && height <= curr.iScreenHeight
-    && (MathUtils::FloatEquals(curr.fRefreshRate, fps, 0.01f)
-      || MathUtils::FloatEquals(curr.fRefreshRate, fps * 2, 0.01f)))
-  {
-    CLog::Log(LOGDEBUG, "Matched current Resolution %s (%d)", curr.strMode.c_str(), resolution);
+  else if (found)
     return;
+
+  if (noWhiteList || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          SETTING_VIDEOSCREEN_WHITELIST_PULLDOWN))
+  {
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] Searching for an exact resolution with a 3:2 pulldown refresh rate");
+
+    for (const auto& mode : indexList)
+    {
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+
+      // allow resolutions that are exact and have 2.5 times the refresh rate
+      // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
+      if (((height == info.iScreenHeight && width <= info.iScreenWidth + 8) ||
+           (width == info.iScreenWidth && height <= info.iScreenHeight + 8)) &&
+          (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
+          MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
+      {
+        CLog::Log(
+            LOGDEBUG,
+            "[WHITELIST] Matched an exact resolution with a 3:2 pulldown refresh rate {} ({})",
+            info.strMode, i);
+        unsigned int pen = abs(info.iScreenHeight - height) + abs(info.iScreenWidth - width);
+        if (pen < penalty)
+        {
+          resolution = i;
+          found = true;
+          penalty = pen;
+        }
+      }
+    }
+    if (found)
+      return;
+
+    CLog::Log(LOGDEBUG, "[WHITELIST] No match for a resolution with a 3:2 pulldown refresh rate");
   }
 
-  CLog::Log(LOGDEBUG, "Current resolution doesn't match, trying default resolution");
+
+  CLog::Log(LOGDEBUG, "[WHITELIST] Searching for a desktop resolution with an exact refresh rate");
 
   const RESOLUTION_INFO desktop_info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(CDisplaySettings::GetInstance().GetCurrentResolution());
 
@@ -189,49 +249,76 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
         (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (desktop_info.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
         MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
     {
-      CLog::Log(LOGDEBUG, "Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
+      CLog::Log(LOGDEBUG,
+                "[WHITELIST] Matched a desktop resolution with an exact refresh rate {} ({})",
+                info.strMode, i);
       resolution = i;
       return;
     }
   }
 
-  CLog::Log(LOGDEBUG, "Default resolution doesn't provide reqired refreshrate, trying default resolution with double refreshrate");
+  CLog::Log(LOGDEBUG, "[WHITELIST] No match for a desktop resolution with an exact refresh rate");
 
-  for (const auto& mode : indexList)
+  if (noWhiteList || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          SETTING_VIDEOSCREEN_WHITELIST_DOUBLEREFRESHRATE))
   {
-    auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] Searching for a desktop resolution with double the refresh rate");
 
-    // allow resolutions that are desktop resolution but have double the refresh rate
-    if (info.iScreenWidth == desktop_info.iScreenWidth &&
-        (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (desktop_info.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
-        MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
+    for (const auto& mode : indexList)
     {
-      CLog::Log(LOGDEBUG, "Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
-      resolution = i;
-      return;
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+
+      // allow resolutions that are desktop resolution but have double the refresh rate
+      if (info.iScreenWidth == desktop_info.iScreenWidth &&
+          (info.dwFlags & D3DPRESENTFLAG_MODEMASK) ==
+              (desktop_info.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
+          MathUtils::FloatEquals(info.fRefreshRate, fps * 2, 0.01f))
+      {
+        CLog::Log(LOGDEBUG,
+                  "[WHITELIST] Matched a desktop resolution with double the refresh rate {} ({})",
+                  info.strMode, i);
+        resolution = i;
+        return;
+      }
     }
+
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] No match for a desktop resolution with double the refresh rate");
   }
 
-  CLog::Log(LOGDEBUG, "Default resolution doesn't provide reqired refreshrate, trying default resolution with 3:2 pullback");
-
-  for (const auto& mode : indexList)
+  if (noWhiteList || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+          SETTING_VIDEOSCREEN_WHITELIST_PULLDOWN))
   {
-    auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] Searching for a desktop resolution with a 3:2 pulldown refresh rate");
 
-    // allow resolutions that are desktop resolution but have 2.5 times the refresh rate
-    if (info.iScreenWidth == desktop_info.iScreenWidth &&
-        (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (desktop_info.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
-        MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
+    for (const auto& mode : indexList)
     {
-      CLog::Log(LOGDEBUG, "Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
-      resolution = i;
-      return;
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+
+      // allow resolutions that are desktop resolution but have 2.5 times the refresh rate
+      if (info.iScreenWidth == desktop_info.iScreenWidth &&
+          (info.dwFlags & D3DPRESENTFLAG_MODEMASK) ==
+              (desktop_info.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
+          MathUtils::FloatEquals(info.fRefreshRate, fps * 2.5f, 0.01f))
+      {
+        CLog::Log(
+            LOGDEBUG,
+            "[WHITELIST] Matched a desktop resolution with a 3:2 pulldown refresh rate {} ({})",
+            info.strMode, i);
+        resolution = i;
+        return;
+      }
     }
+
+    CLog::Log(LOGDEBUG,
+              "[WHITELIST] No match for a desktop resolution with a 3:2 pulldown refresh rate");
   }
 
-  CLog::Log(LOGDEBUG, "No whitelisted resolution matched");
+  CLog::Log(LOGDEBUG, "[WHITELIST] No resolution matched");
 }
 
 bool CResolutionUtils::FindResolutionFromOverride(float fps, int width, bool is3D, RESOLUTION &resolution, float& weight, bool fallback)
@@ -316,4 +403,22 @@ bool CResolutionUtils::HasWhitelist()
 {
   std::vector<CVariant> indexList = CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(CSettings::SETTING_VIDEOSCREEN_WHITELIST);
   return !indexList.empty();
+}
+
+void CResolutionUtils::PrintWhitelist()
+{
+  std::string modeStr;
+  auto indexList = CServiceBroker::GetSettingsComponent()->GetSettings()->GetList(
+      CSettings::SETTING_VIDEOSCREEN_WHITELIST);
+  if (!indexList.empty())
+  {
+    for (const auto& mode : indexList)
+    {
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+      modeStr.append("\n" + info.strMode);
+    }
+
+    CLog::Log(LOGDEBUG, "[WHITELIST] whitelisted modes:{}", modeStr);
+  }
 }

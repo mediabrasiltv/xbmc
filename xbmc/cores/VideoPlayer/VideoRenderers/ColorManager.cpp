@@ -9,7 +9,6 @@
 #include "ColorManager.h"
 
 #include "ServiceBroker.h"
-#include "cores/VideoPlayer/VideoRenderers/RenderFlags.h"
 #include "filesystem/File.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
@@ -85,21 +84,25 @@ bool CColorManager::IsValid() const
   }
 }
 
-CMS_PRIMARIES videoFlagsToPrimaries(int flags)
+CMS_PRIMARIES avColorToCmsPrimaries(AVColorPrimaries primaries)
 {
-  if (flags & CONF_FLAGS_COLPRI_BT709)
-    return CMS_PRIMARIES_BT709;
-  if (flags & CONF_FLAGS_COLPRI_BT2020)
-    return CMS_PRIMARIES_BT2020;
-  if (flags & CONF_FLAGS_COLPRI_170M)
-    return CMS_PRIMARIES_170M;
-  if (flags & CONF_FLAGS_COLPRI_BT470M)
-    return CMS_PRIMARIES_BT470M;
-  if (flags & CONF_FLAGS_COLPRI_BT470BG)
-    return CMS_PRIMARIES_BT470BG;
-  if (flags & CONF_FLAGS_COLPRI_240M)
-    return CMS_PRIMARIES_240M;
-  return CMS_PRIMARIES_BT709; // default to bt.709
+  switch (primaries)
+  {
+    case AVCOL_PRI_BT709:
+      return CMS_PRIMARIES_BT709;
+    case AVCOL_PRI_BT470M:
+      return CMS_PRIMARIES_BT470M;
+    case AVCOL_PRI_BT470BG:
+      return CMS_PRIMARIES_BT470BG;
+    case AVCOL_PRI_SMPTE170M:
+      return CMS_PRIMARIES_170M;
+    case AVCOL_PRI_SMPTE240M:
+      return CMS_PRIMARIES_240M;
+    case AVCOL_PRI_BT2020:
+      return CMS_PRIMARIES_BT2020;
+    default:
+      return CMS_PRIMARIES_BT709;
+  }
 }
 
 bool CColorManager::Get3dLutSize(CMS_DATA_FORMAT format, int *clutSize, int *dataSize)
@@ -147,20 +150,21 @@ bool CColorManager::Get3dLutSize(CMS_DATA_FORMAT format, int *clutSize, int *dat
     return true;
   }
   default:
-    CLog::Log(LOGDEBUG, "ColorManager: unknown CMS mode %d\n", cmsmode);
+    CLog::Log(LOGDEBUG, "ColorManager: unknown CMS mode %d", cmsmode);
     return false;
   }
 }
 
-bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT format, int clutSize, uint16_t *clutData)
+bool CColorManager::GetVideo3dLut(AVColorPrimaries srcPrimaries, int* cmsToken,
+                                  CMS_DATA_FORMAT format, int clutSize, uint16_t* clutData)
 {
   const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
-  CMS_PRIMARIES videoPrimaries = videoFlagsToPrimaries(videoFlags);
-  CLog::Log(LOGDEBUG, "ColorManager: video primaries: %d\n", (int)videoPrimaries);
+  CMS_PRIMARIES videoPrimaries = avColorToCmsPrimaries(srcPrimaries);
+  CLog::Log(LOGDEBUG, "ColorManager: video primaries: %d", (int)videoPrimaries);
   switch (settings->GetInt("videoscreen.cmsmode"))
   {
   case CMS_MODE_3DLUT:
-    CLog::Log(LOGDEBUG, "ColorManager: CMS_MODE_3DLUT\n");
+    CLog::Log(LOGDEBUG, "ColorManager: CMS_MODE_3DLUT");
     m_cur3dlutFile = settings->GetString("videoscreen.cms3dlut");
     if (!Load3dLut(m_cur3dlutFile, format, clutSize, clutData))
       return false;
@@ -168,7 +172,7 @@ bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT
     break;
 
   case CMS_MODE_PROFILE:
-    CLog::Log(LOGDEBUG, "ColorManager: CMS_MODE_PROFILE\n");
+    CLog::Log(LOGDEBUG, "ColorManager: CMS_MODE_PROFILE");
 #if defined(HAVE_LCMS2)
     {
       // check if display profile is not loaded, or has changed
@@ -184,7 +188,7 @@ bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT
         // detect blackpoint
         if (cmsDetectBlackPoint(&m_blackPoint, m_hProfile, INTENT_PERCEPTUAL, 0))
         {
-          CLog::Log(LOGDEBUG, "ColorManager: black point: %f\n", m_blackPoint.Y);
+          CLog::Log(LOGDEBUG, "ColorManager: black point: %f", m_blackPoint.Y);
         }
         m_curIccProfile = settings->GetString("videoscreen.displayprofile");
       }
@@ -198,10 +202,10 @@ bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT
       // create source profile
       m_curIccWhitePoint = static_cast<CMS_WHITEPOINT>(settings->GetInt("videoscreen.cmswhitepoint"));
       m_curIccPrimaries = static_cast<CMS_PRIMARIES>(settings->GetInt("videoscreen.cmsprimaries"));
-      CLog::Log(LOGDEBUG, "ColorManager: primaries setting: %d\n", (int)m_curIccPrimaries);
+      CLog::Log(LOGDEBUG, "ColorManager: primaries setting: %d", (int)m_curIccPrimaries);
       if (m_curIccPrimaries == CMS_PRIMARIES_AUTO)
         m_curIccPrimaries = videoPrimaries;
-      CLog::Log(LOGDEBUG, "ColorManager: source profile primaries: %d\n", (int)m_curIccPrimaries);
+      CLog::Log(LOGDEBUG, "ColorManager: source profile primaries: %d", (int)m_curIccPrimaries);
       cmsHPROFILE sourceProfile = CreateSourceProfile(m_curIccPrimaries, gammaCurve, m_curIccWhitePoint);
 
       // link profiles
@@ -228,7 +232,8 @@ bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT
 #endif  //defined(HAVE_LCMS2)
 
   default:
-    CLog::Log(LOGDEBUG, "ColorManager: unknown CMS mode %d\n", settings->GetInt("videoscreen.cmsmode"));
+    CLog::Log(LOGDEBUG, "ColorManager: unknown CMS mode %d",
+              settings->GetInt("videoscreen.cmsmode"));
     return false;
   }
 
@@ -239,7 +244,7 @@ bool CColorManager::GetVideo3dLut(int videoFlags, int *cmsToken, CMS_DATA_FORMAT
   return true;
 }
 
-bool CColorManager::CheckConfiguration(int cmsToken, int flags)
+bool CColorManager::CheckConfiguration(int cmsToken, AVColorPrimaries srcPrimaries)
 {
   if (cmsToken != m_curCmsToken)
     return false;
@@ -260,7 +265,8 @@ bool CColorManager::CheckConfiguration(int cmsToken, int flags)
       return false; // whitepoint changed
     {
       CMS_PRIMARIES primaries = static_cast<CMS_PRIMARIES>(settings->GetInt("videoscreen.cmsprimaries"));
-      if (primaries == CMS_PRIMARIES_AUTO) primaries = videoFlagsToPrimaries(flags);
+      if (primaries == CMS_PRIMARIES_AUTO)
+        primaries = avColorToCmsPrimaries(srcPrimaries);
       if (m_curIccPrimaries != primaries)
         return false; // primaries changed
     }
@@ -305,7 +311,7 @@ struct H3DLUT
   // and by the array 'lutDataxx', of length 'lutCompressedSize'.
 };
 
-bool CColorManager::Probe3dLut(const std::string filename, int *clutSize)
+bool CColorManager::Probe3dLut(const std::string& filename, int* clutSize)
 {
   struct H3DLUT header;
   CFile lutFile;
@@ -356,7 +362,10 @@ bool CColorManager::Probe3dLut(const std::string filename, int *clutSize)
   return true;
 }
 
-bool CColorManager::Load3dLut(const std::string filename, CMS_DATA_FORMAT format, int CLUTsize, uint16_t *clutData)
+bool CColorManager::Load3dLut(const std::string& filename,
+                              CMS_DATA_FORMAT format,
+                              int CLUTsize,
+                              uint16_t* clutData)
 {
   struct H3DLUT header;
   CFile lutFile;
@@ -412,14 +421,14 @@ bool CColorManager::Load3dLut(const std::string filename, CMS_DATA_FORMAT format
 #if defined(HAVE_LCMS2)
 // ICC profile support
 
-cmsHPROFILE CColorManager::LoadIccDisplayProfile(const std::string filename)
+cmsHPROFILE CColorManager::LoadIccDisplayProfile(const std::string& filename)
 {
   cmsHPROFILE hProfile;
 
   hProfile = cmsOpenProfileFromFile(filename.c_str(), "r");
   if (!hProfile)
   {
-    CLog::Log(LOGERROR, "ICC profile not found\n");
+    CLog::Log(LOGERROR, "ICC profile not found");
   }
   return hProfile;
 }
@@ -467,10 +476,8 @@ cmsToneCurve* CColorManager::CreateToneCurve(CMS_TRC_TYPE gammaType, float gamma
         }
       }
       gammaValue = gammaGuess;
-      CLog::Log(LOGINFO, "calculated technical gamma %0.3f (50%% target %0.4f, output %0.4f)\n",
-        gammaValue,
-        TARGET(effectiveGamma),
-        HALFPT(blackPoint.Y, gammaValue));
+      CLog::Log(LOGINFO, "calculated technical gamma %0.3f (50%% target %0.4f, output %0.4f)",
+                gammaValue, TARGET(effectiveGamma), HALFPT(blackPoint.Y, gammaValue));
 #undef TARGET
 #undef GAIN
 #undef LIFT
@@ -514,7 +521,7 @@ cmsToneCurve* CColorManager::CreateToneCurve(CMS_TRC_TYPE gammaType, float gamma
     break;
 
   default:
-    CLog::Log(LOGERROR, "gamma type %d not implemented\n", gammaType);
+    CLog::Log(LOGERROR, "gamma type %d not implemented", gammaType);
   }
 
   cmsToneCurve* result = cmsBuildTabulatedToneCurveFloat(0,
@@ -601,11 +608,9 @@ void CColorManager::Create3dLut(cmsHTRANSFORM transform, CMS_DATA_FORMAT format,
   for (int y=0; y<lutResolution; y+=1)
   {
     int index = components*(y*lutResolution*lutResolution + y*lutResolution + y);
-    CLog::Log(LOGDEBUG, "  %d (%d): %d %d %d\n",
-        (int)round(y * 255 / (lutResolution-1.0)), y,
-        (int)round(clutData[index+0]),
-        (int)round(clutData[index+1]),
-        (int)round(clutData[index+2]));
+    CLog::Log(LOGDEBUG, "  %d (%d): %d %d %d", (int)round(y * 255 / (lutResolution - 1.0)), y,
+              (int)round(clutData[index + 0]), (int)round(clutData[index + 1]),
+              (int)round(clutData[index + 2]));
   }
   delete[] input;
   delete[] output;

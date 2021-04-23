@@ -1,48 +1,44 @@
 /*
- *  Copyright (C) 2005-2018 Team Kodi
+ *  Copyright (C) 2005-2020 Team Kodi
  *  This file is part of Kodi - https://kodi.tv
  *
  *  SPDX-License-Identifier: GPL-2.0-or-later
  *  See LICENSES/README.md for more information.
  */
 
-#include "threads/SystemClock.h"
 #include "GUIWindowPictures.h"
+
+#include "Application.h"
+#include "Autorun.h"
+#include "GUIDialogPictureInfo.h"
+#include "GUIPassword.h"
+#include "GUIWindowSlideShow.h"
+#include "PictureInfoLoader.h"
+#include "PlayListPlayer.h"
 #include "ServiceBroker.h"
 #include "URL.h"
 #include "Util.h"
-#include "Application.h"
-#include "GUIPassword.h"
-#include "GUIDialogPictureInfo.h"
-#include "addons/GUIDialogAddonInfo.h"
+#include "addons/gui/GUIDialogAddonInfo.h"
 #include "dialogs/GUIDialogMediaSource.h"
 #include "dialogs/GUIDialogProgress.h"
-#include "playlists/PlayListFactory.h"
-#include "PictureInfoLoader.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
-#include "view/GUIViewState.h"
+#include "interfaces/AnnouncementManager.h"
+#include "media/MediaLockState.h"
 #include "messaging/helpers/DialogOKHelper.h"
-#include "PlayListPlayer.h"
 #include "playlists/PlayList.h"
+#include "playlists/PlayListFactory.h"
 #include "settings/MediaSourceSettings.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
-#include "utils/log.h"
-#include "utils/URIUtils.h"
-#include "utils/Variant.h"
-#include "Autorun.h"
-#include "interfaces/AnnouncementManager.h"
+#include "threads/SystemClock.h"
 #include "utils/SortUtils.h"
 #include "utils/StringUtils.h"
-#include "GUIWindowSlideShow.h"
-
-#ifdef TARGET_POSIX
-#include "platform/posix/XTimeUtils.h"
-#endif
-
-#define CONTROL_BTNVIEWASICONS      2
-#define CONTROL_BTNSORTBY           3
+#include "utils/URIUtils.h"
+#include "utils/Variant.h"
+#include "utils/XTimeUtils.h"
+#include "utils/log.h"
+#include "view/GUIViewState.h"
 #define CONTROL_BTNSORTASC          4
 #define CONTROL_LABELFILES         12
 
@@ -229,7 +225,7 @@ void CGUIWindowPictures::OnPrepareFileItems(CFileItemList& items)
         m_dlgProgress->Progress();
       }
     } // if (bShowProgress)
-    Sleep(1);
+    KODI::TIME::Sleep(1);
   } // while (loader.IsLoading())
 
   if (bProgressVisible && m_dlgProgress)
@@ -321,7 +317,7 @@ bool CGUIWindowPictures::ShowPicture(int iItem, bool startSlideShow)
 
   pSlideShow->Reset();
   bool bShowVideos = CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(CSettings::SETTING_PICTURES_SHOWVIDEOS);
-  for (const auto pItem : *m_vecItems)
+  for (const auto& pItem : *m_vecItems)
   {
     if (!pItem->m_bIsFolder &&
         !(URIUtils::IsRAR(pItem->GetPath()) || URIUtils::IsZIP(pItem->GetPath())) &&
@@ -343,7 +339,8 @@ bool CGUIWindowPictures::ShowPicture(int iItem, bool startSlideShow)
     CVariant param;
     param["player"]["speed"] = 1;
     param["player"]["playerid"] = PLAYLIST_PICTURE;
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "xbmc", "OnPlay", pSlideShow->GetCurrentSlide(), param);
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::Player, "OnPlay",
+                                                       pSlideShow->GetCurrentSlide(), param);
   }
 
   m_slideShowStarted = true;
@@ -602,7 +599,7 @@ std::string CGUIWindowPictures::GetStartFolder(const std::string &dir)
   int iIndex = CUtil::GetMatchingSource(dir, shares, bIsSourceName);
   if (iIndex > -1)
   {
-    if (iIndex < (int)shares.size() && shares[iIndex].m_iHasLock == 2)
+    if (iIndex < static_cast<int>(shares.size()) && shares[iIndex].m_iHasLock == LOCK_STATE_LOCKED)
     {
       CFileItem item(shares[iIndex]);
       if (!g_passwordManager.IsItemUnlocked(&item,"pictures"))

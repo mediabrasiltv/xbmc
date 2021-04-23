@@ -8,26 +8,29 @@
 
 #pragma once
 
-#include "utils/XBMCTinyXML.h"
+#include "cores/ExternalPlayer/ExternalPlayer.h"
 #include "cores/IPlayer.h"
+#include "cores/RetroPlayer/RetroPlayer.h"
 #include "cores/VideoPlayer/VideoPlayer.h"
 #include "cores/paplayer/PAPlayer.h"
-#include "cores/RetroPlayer/RetroPlayer.h"
-#include "cores/ExternalPlayer/ExternalPlayer.h"
 #ifdef HAS_UPNP
 #include "network/upnp/UPnPPlayer.h"
 #endif
-#include "system.h"
+#include "utils/XBMCTinyXML.h"
 #include "utils/log.h"
+
+#include <utility>
+
+#include "system.h"
 
 class CPlayerCoreConfig
 {
 public:
-
-  CPlayerCoreConfig(std::string name, std::string type, const TiXmlElement* pConfig, const std::string& id = ""):
-    m_name(name),
-    m_id(id),
-    m_type(type)
+  CPlayerCoreConfig(std::string name,
+                    std::string type,
+                    const TiXmlElement* pConfig,
+                    const std::string& id = "")
+    : m_name(std::move(name)), m_id(id), m_type(std::move(type))
   {
     m_bPlaysAudio = false;
     m_bPlaysVideo = false;
@@ -37,8 +40,8 @@ public:
       m_config = static_cast<TiXmlElement*>(pConfig->Clone());
       const char *sAudio = pConfig->Attribute("audio");
       const char *sVideo = pConfig->Attribute("video");
-      m_bPlaysAudio = sAudio && stricmp(sAudio, "true") == 0;
-      m_bPlaysVideo = sVideo && stricmp(sVideo, "true") == 0;
+      m_bPlaysAudio = sAudio && StringUtils::CompareNoCase(sAudio, "true") == 0;
+      m_bPlaysVideo = sVideo && StringUtils::CompareNoCase(sVideo, "true") == 0;
     }
     else
     {

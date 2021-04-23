@@ -31,7 +31,7 @@
 #include "GUIUserMessages.h"
 #include "ServiceBroker.h"
 #include "cores/FFmpeg.h"
-#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -522,32 +522,32 @@ bool CDVDRadioRDSData::CheckStream(CDVDStreamInfo &hints)
 
 bool CDVDRadioRDSData::OpenStream(CDVDStreamInfo hints)
 {
+  CloseStream(true);
+
   m_messageQueue.Init();
   if (hints.type == STREAM_RADIO_RDS)
   {
     Flush();
-    CLog::Log(LOGNOTICE, "Creating UECP (RDS) data thread");
+    CLog::Log(LOGINFO, "Creating UECP (RDS) data thread");
     Create();
+    return true;
   }
-  return true;
+  return false;
 }
 
 void CDVDRadioRDSData::CloseStream(bool bWaitForBuffers)
 {
-  // wait until buffers are empty
-  if (bWaitForBuffers)
-    m_messageQueue.WaitUntilEmpty();
-
   m_messageQueue.Abort();
 
   // wait for decode_video thread to end
-  CLog::Log(LOGNOTICE, "Radio UECP (RDS) Processor - waiting for data thread to exit");
+  CLog::Log(LOGINFO, "Radio UECP (RDS) Processor - waiting for data thread to exit");
 
   StopThread(); // will set this->m_bStop to true
 
   m_messageQueue.End();
   m_currentInfoTag.reset();
-  m_currentChannel->SetRadioRDSInfoTag(m_currentInfoTag);
+  if (m_currentChannel)
+    m_currentChannel->SetRadioRDSInfoTag(m_currentInfoTag);
   m_currentChannel.reset();
 }
 
@@ -624,7 +624,7 @@ void CDVDRadioRDSData::ResetRDSCache()
 
 void CDVDRadioRDSData::Process()
 {
-  CLog::Log(LOGNOTICE, "Radio UECP (RDS) Processor - running thread");
+  CLog::Log(LOGINFO, "Radio UECP (RDS) Processor - running thread");
 
   while (!m_bStop)
   {
@@ -678,7 +678,7 @@ void CDVDRadioRDSData::Flush()
 
 void CDVDRadioRDSData::OnExit()
 {
-  CLog::Log(LOGNOTICE, "Radio UECP (RDS) Processor - thread end");
+  CLog::Log(LOGINFO, "Radio UECP (RDS) Processor - thread end");
 }
 
 std::string CDVDRadioRDSData::GetRadioText(unsigned int line)
@@ -723,7 +723,7 @@ std::string CDVDRadioRDSData::GetRadioText(unsigned int line)
   return str;
 }
 
-void CDVDRadioRDSData::SetRadioStyle(std::string genre)
+void CDVDRadioRDSData::SetRadioStyle(const std::string& genre)
 {
   g_application.CurrentFileItem().GetMusicInfoTag()->SetGenre(genre);
   m_currentInfoTag->SetProgStyle(genre);
@@ -938,7 +938,7 @@ unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
 
     CVariant data(CVariant::VariantTypeObject);
     data["on"] = true;
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "xbmc", "RDSRadioTA", data);
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "RDSRadioTA", data);
   }
 
   if (!traffic_announcement && m_TA_TP_TrafficAdvisory && CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool("pvrplayback.trafficadvisory"))
@@ -948,7 +948,7 @@ unsigned int CDVDRadioRDSData::DecodeTA_TP(uint8_t *msgElement)
 
     CVariant data(CVariant::VariantTypeObject);
     data["on"] = false;
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "xbmc", "RDSRadioTA", data);
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "RDSRadioTA", data);
   }
 
   return 4;
@@ -1078,7 +1078,9 @@ unsigned int CDVDRadioRDSData::DecodeRT(uint8_t *msgElement, unsigned int len)
   unsigned int msgLength = msgElement[UECP_ME_MEL];
   if (msgLength > len-2)
   {
-    CLog::Log(LOGERROR, "Radio UECP (RDS) - %s - RT-Error: Length=0 or not correct (MFL= %d, MEL= %d)\n", __FUNCTION__, len, msgLength);
+    CLog::Log(LOGERROR,
+              "Radio UECP (RDS) - %s - RT-Error: Length=0 or not correct (MFL= %d, MEL= %d)",
+              __FUNCTION__, len, msgLength);
     m_UECPDataDeadBreak = true;
     return 0;
   }
@@ -1171,7 +1173,7 @@ unsigned int CDVDRadioRDSData::DecodeRTC(uint8_t *msgElement)
 
   CVariant data(CVariant::VariantTypeObject);
   data["dateTime"] = (m_RTC_DateTime.IsValid()) ? m_RTC_DateTime.GetAsRFC1123DateTime() : "";
-  CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "xbmc", "RDSRadioRTC", data);
+  CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "RDSRadioRTC", data);
 
   return 8;
 }
@@ -1728,6 +1730,6 @@ void CDVDRadioRDSData::SendTMCSignal(unsigned int flags, uint8_t *data)
     msg["y"]       = (unsigned int)(m_TMC_LastData[1]<<8 | m_TMC_LastData[2]);
     msg["z"]       = (unsigned int)(m_TMC_LastData[3]<<8 | m_TMC_LastData[4]);
 
-    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "xbmc", "RDSRadioTMC", msg);
+    CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::PVR, "RDSRadioTMC", msg);
   }
 }

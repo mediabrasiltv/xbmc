@@ -11,7 +11,6 @@
 #include "XBDateTime.h"
 #include "pvr/timers/PVRTimerType.h"
 #include "threads/CriticalSection.h"
-#include "threads/SystemClock.h"
 #include "utils/ISerializable.h"
 
 #include <memory>
@@ -65,6 +64,20 @@ namespace PVR
      * @return the timer or null if timer could not be created
      */
     static std::shared_ptr<CPVRTimerInfoTag> CreateTimerTag(const std::shared_ptr<CPVRChannel>& channel, const CDateTime& start, int iDuration);
+
+    /*!
+     * @brief create a recording or reminder timer or timer rule for the given epg info tag.
+     * @param tag the epg info tag
+     * @param bCreateRule if true, create a timer rule, create a one shot timer otherwise
+     * @param bCreateReminder if true, create a reminder timer or rule, create a recording timer or rule otherwise
+     * @param bReadOnly whether the timer/rule is read only
+     * @return the timer or null if timer could not be created
+     */
+    static std::shared_ptr<CPVRTimerInfoTag> CreateFromEpg(
+        const std::shared_ptr<CPVREpgInfoTag>& tag,
+        bool bCreateRule,
+        bool bCreateReminder,
+        bool bReadOnly = false);
 
     /*!
      * @brief create a timer or timer rule for the given epg info tag.
@@ -237,13 +250,12 @@ namespace PVR
 
     /*!
      * @brief Get the text for the notification.
-     * @param strText The notification.
      */
-    void GetNotificationText(std::string& strText) const;
+    std::string GetNotificationText() const;
 
     /*!
-    * @brief Get the text for the notification when a timer has been deleted
-    */
+     * @brief Get the text for the notification when a timer has been deleted
+     */
     std::string GetDeletedNotificationText() const;
 
     const std::string& Title() const;
@@ -275,13 +287,6 @@ namespace PVR
      * @return The result.
      */
     TimerOperationResult DeleteFromClient(bool bForce = false) const;
-
-    /*!
-     * @brief Rename this timer on the backend, transferring all local data of this timer to the backend.
-     * @param strNewName The new name.
-     * @return True on success, false otherwise.
-     */
-    bool RenameOnClient(const std::string& strNewName);
 
     /*!
      * @brief Update this timer on the backend, transferring all local data of this timer to the backend.
@@ -361,7 +366,6 @@ namespace PVR
     std::string GetWeekdaysString() const;
     void UpdateEpgInfoTag();
 
-    static std::shared_ptr<CPVRTimerInfoTag> CreateFromEpg(const std::shared_ptr<CPVREpgInfoTag>& tag, bool bCreateRule, bool bCreateReminder, bool bReadOnly);
     static std::shared_ptr<CPVRTimerInfoTag> CreateFromDate(const std::shared_ptr<CPVRChannel>& channel, const CDateTime& start, int iDuration, bool bCreateReminder, bool bReadOnly);
 
     mutable CCriticalSection m_critSection;
@@ -382,6 +386,6 @@ namespace PVR
     mutable std::shared_ptr<CPVREpgInfoTag> m_epgTag; /*!< epg info tag matching m_iEpgUid. */
     mutable std::shared_ptr<CPVRChannel> m_channel;
 
-    mutable XbmcThreads::EndTime m_epTagRefetchTimeout;
+    mutable bool m_bProbedEpgTag = false;
   };
 }

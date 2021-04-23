@@ -41,7 +41,7 @@ CGUIAudioManager::~CGUIAudioManager()
   m_settings->UnregisterCallback(this);
 }
 
-void CGUIAudioManager::OnSettingChanged(std::shared_ptr<const CSetting> setting)
+void CGUIAudioManager::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -54,7 +54,9 @@ void CGUIAudioManager::OnSettingChanged(std::shared_ptr<const CSetting> setting)
   }
 }
 
-bool CGUIAudioManager::OnSettingUpdate(std::shared_ptr<CSetting> setting, const char *oldSettingId, const TiXmlNode *oldSettingNode)
+bool CGUIAudioManager::OnSettingUpdate(const std::shared_ptr<CSetting>& setting,
+                                       const char* oldSettingId,
+                                       const TiXmlNode* oldSettingNode)
 {
   if (setting == NULL)
     return false;
@@ -227,9 +229,10 @@ std::string GetSoundSkinPath()
     return "";
 
   ADDON::AddonPtr addon;
-  if (!CServiceBroker::GetAddonMgr().GetAddon(value, addon, ADDON::ADDON_RESOURCE_UISOUNDS))
+  if (!CServiceBroker::GetAddonMgr().GetAddon(value, addon, ADDON::ADDON_RESOURCE_UISOUNDS,
+                                              ADDON::OnlyEnabled::YES))
   {
-    CLog::Log(LOGNOTICE, "Unknown sounds addon '%s'. Setting default sounds.", value.c_str());
+    CLog::Log(LOGINFO, "Unknown sounds addon '%s'. Setting default sounds.", value.c_str());
     setting->Reset();
   }
   return URIUtils::AddFileToFolder("resource://", setting->GetValue());
@@ -257,7 +260,8 @@ bool CGUIAudioManager::Load()
   //  Load the config file
   if (!xmlDoc.LoadFile(strSoundsXml))
   {
-    CLog::Log(LOGNOTICE, "%s, Line %d\n%s", strSoundsXml.c_str(), xmlDoc.ErrorRow(), xmlDoc.ErrorDesc());
+    CLog::Log(LOGINFO, "%s, Line %d\n%s", strSoundsXml.c_str(), xmlDoc.ErrorRow(),
+              xmlDoc.ErrorDesc());
     return false;
   }
 
@@ -265,7 +269,7 @@ bool CGUIAudioManager::Load()
   std::string strValue = pRoot->Value();
   if ( strValue != "sounds")
   {
-    CLog::Log(LOGNOTICE, "%s Doesn't contain <sounds>", strSoundsXml.c_str());
+    CLog::Log(LOGINFO, "%s Doesn't contain <sounds>", strSoundsXml.c_str());
     return false;
   }
 

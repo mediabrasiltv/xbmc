@@ -4,12 +4,13 @@ NDK_VERSION=${NDK_VERSION:-"Default"}
 NDK_API=${NDK_API:-"Default"}
 Configuration=${Configuration:-"Default"}
 XBMC_DEPENDS_ROOT=${XBMC_DEPENDS_ROOT:-"Default"}
-DARWIN_ARM_CPU=${DARWIN_ARM_CPU:-"Default"}
 XCODE_APP=${XCODE_APP:-"Default"}
 PATH_CHANGE_REV_FILENAME=".last_success_revision"
 FAILED_BUILD_FILENAME=".last_failed_revision"
 #TARBALLS ENV-VAR is only used by android scripts atm
 TARBALLS=${TARBALLS:-"/opt/xbmc-tarballs"}
+RENDER_SYSTEM=${RENDER_SYSTEM:-"Default"}
+BUILD_HOST=${BUILD_HOST:-"Default"}
 
 BINARY_ADDONS_ROOT=tools/depends/target
 BINARY_ADDONS="binary-addons"
@@ -22,15 +23,14 @@ case $XBMC_PLATFORM_DIR in
     DEFAULT_SDK_VERSION=12.2
     DEFAULT_XBMC_DEPENDS_ROOT=$WORKSPACE/tools/depends/xbmc-depends
     DEFAULT_CONFIGURATION="Debug"
-    DEFAULT_DARWIN_ARM_CPU="armv7"
     DEFAULT_XCODE_APP="Xcode10.2.app"
     ;;
 
   tvos)
-    DEFAULT_SDK_VERSION=12.2
+    DEFAULT_SDK_VERSION=13.2
     DEFAULT_XBMC_DEPENDS_ROOT=$WORKSPACE/tools/depends/xbmc-depends
     DEFAULT_CONFIGURATION="Debug"
-    DEFAULT_XCODE_APP="Xcode10.2.app"
+    DEFAULT_XCODE_APP="Xcode11.3.1.app"
     ;;
 
   osx64)
@@ -41,21 +41,17 @@ case $XBMC_PLATFORM_DIR in
     ;;
 
   android)
-    DEFAULT_NDK_VERSION="20"
-    DEFAULT_NDK_API="21"
+    DEFAULT_NDK_VERSION="20" # NDK package version (newer API can be inside)
+    DEFAULT_NDK_API="21" # Lollipop API level (21) defined in package ./sysroot/usr/include/android/api-level.h
     DEFAULT_XBMC_DEPENDS_ROOT=$WORKSPACE/tools/depends/xbmc-depends
     DEFAULT_CONFIGURATION="Debug"
     ;;
 
-  linux*)
+  linux)
     DEFAULT_XBMC_DEPENDS_ROOT=$WORKSPACE/tools/depends/xbmc-depends
     DEFAULT_CONFIGURATION="Debug"
-  ;;
-
-  rbpi)
-    JENKINS_RBPI_DEVENV=${JENKINS_RBPI_DEVENV:-"/home/jenkins/rbpi-dev"}
-    DEFAULT_XBMC_DEPENDS_ROOT=$WORKSPACE/tools/depends/xbmc-depends
-    DEFAULT_CONFIGURATION="Debug"
+    DEFAULT_RENDER_SYSTEM="gl"
+    DEFAULT_BUILD_HOST="x86_64-linux-gnu"
   ;;
 
   freebsd)
@@ -83,11 +79,6 @@ then
   XBMC_DEPENDS_ROOT=$DEFAULT_XBMC_DEPENDS_ROOT
 fi
 
-if [ "$DARWIN_ARM_CPU" == "Default" ]
-then
-  DARWIN_ARM_CPU=$DEFAULT_DARWIN_ARM_CPU
-fi
-
 if [ "$XCODE_APP" == "Default" ]
 then
   XCODE_APP=$DEFAULT_XCODE_APP
@@ -104,6 +95,16 @@ fi
 if [ "$Configuration" == "Release" ]
 then
   DEBUG_SWITCH='--disable-debug'
+fi
+
+if [ "$RENDER_SYSTEM" == "Default" ]
+then
+  RENDER_SYSTEM=$DEFAULT_RENDER_SYSTEM
+fi
+
+if [ "$BUILD_HOST" == "Default" ]
+then
+  BUILD_HOST=$DEFAULT_BUILD_HOST
 fi
 
 #helper functions

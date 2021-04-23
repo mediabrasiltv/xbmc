@@ -123,6 +123,11 @@ namespace PVR
     std::shared_ptr<CPVRChannelGroup> GetLastPlayedGroup(int iChannelID = -1) const;
 
     /*!
+     * @return The last opened group.
+     */
+    std::shared_ptr<CPVRChannelGroup> GetLastOpenedGroup() const;
+
+    /*!
      * @brief Get the list of groups.
      * @param groups The list to store the results in.
      * @param bExcludeHidden Whenever to exclude hidden channel groups.
@@ -174,6 +179,14 @@ namespace PVR
      * @return True if it was deleted successfully, false if not.
      */
     bool DeleteGroup(const CPVRChannelGroup& group);
+
+    /*!
+     * @brief Hide/unhide a group in this container.
+     * @param group The group to hide/unhide.
+     * @param bHide True to hide the group, false to unhide it.
+     * @return True on success, false otherwise.
+     */
+    bool HideGroup(const std::shared_ptr<CPVRChannelGroup>& group, bool bHide);
 
     /*!
      * @brief Create EPG tags for all channels of the internal group.

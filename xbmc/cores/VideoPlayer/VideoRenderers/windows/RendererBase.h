@@ -7,14 +7,16 @@
  */
 #pragma once
 
-#include "cores/VideoSettings.h"
-#include "guilib/D3DResource.h"
 #include "VideoRenderers/ColorManager.h"
 #include "VideoRenderers/RenderInfo.h"
 #include "VideoRenderers/VideoShaders/WinVideoFilter.h"
+#include "cores/VideoSettings.h"
+#include "guilib/D3DResource.h"
 
-#include <d3d11.h>
 #include <vector>
+
+#include <d3d11_4.h>
+#include <dxgi1_5.h>
 extern "C" {
 #include <libavutil/mastering_display_metadata.h>
 }
@@ -36,10 +38,17 @@ namespace win
 
 enum RenderMethod
 {
-  RENDER_INVALID = 0x00,
-  RENDER_DXVA = 0x01,
-  RENDER_PS = 0x02,
-  RENDER_SW = 0x03,
+  RENDER_INVALID = 0,
+  RENDER_DXVA = 1,
+  RENDER_PS = 2,
+  RENDER_SW = 3
+};
+
+enum class HDR_TYPE
+{
+  HDR_NONE_SDR = 0,
+  HDR_HDR10 = 1,
+  HDR_HLG = 2
 };
 
 class CRenderBuffer
@@ -49,10 +58,10 @@ public:
 
   unsigned GetWidth() const { return m_widthTex; }
   unsigned GetHeight() const { return m_heightTex; }
+  bool IsLoaded() { return m_bLoaded; }
 
   virtual void AppendPicture(const VideoPicture& picture);
   virtual void ReleasePicture();
-  virtual bool IsLoaded() { return false; }
   virtual bool UploadBuffer() { return false; }
   virtual HRESULT GetResource(ID3D11Resource** ppResource, unsigned* index) const;
 
@@ -92,6 +101,7 @@ protected:
   Microsoft::WRL::ComPtr<ID3D11Texture2D> m_staging;
   D3D11_TEXTURE2D_DESC m_sDesc{};
   bool m_bPending = false;
+  bool m_bLoaded = false;
 };
 
 class CRendererBase
@@ -120,6 +130,7 @@ public:
   static DXGI_FORMAT GetDXGIFormat(const VideoPicture &picture);
   static DXGI_FORMAT GetDXGIFormat(CVideoBuffer* videoBuffer);
   static AVPixelFormat GetAVFormat(DXGI_FORMAT dxgi_format);
+  static DXGI_HDR_METADATA_HDR10 GetDXGIHDR10MetaData(CRenderBuffer* rb);
 
   int HDR(CRenderBuffer* meta);
 
@@ -127,10 +138,12 @@ protected:
   explicit CRendererBase(CVideoSettings& videoSettings);
 
   bool CreateIntermediateTarget(unsigned int width, unsigned int height, bool dynamic = false);
-  void OnCMSConfigChanged(unsigned flags);
+  void OnCMSConfigChanged(AVColorPrimaries srcPrimaries);
   void ReorderDrawPoints(const CRect& destRect, CPoint(&rotatedPoints)[4]) const;
   bool CreateRenderBuffer(int index);
   void DeleteRenderBuffer(int index);
+
+  void ProcessHDR(CRenderBuffer* rb);
 
   virtual void RenderImpl(CD3DTexture& target, CRect& sourceRect, CPoint (&destPoints)[4], uint32_t flags) = 0;
   virtual void FinalOutput(CD3DTexture& source, CD3DTexture& target, const CRect& sourceRect, const CPoint(&destPoints)[4]);
@@ -140,13 +153,14 @@ protected:
   virtual void CheckVideoParameters();
   virtual void OnViewSizeChanged() {}
   virtual void OnOutputReset() {}
-  virtual bool UseToneMapping() const { return m_toneMapping; }
 
   bool m_toneMapping = false;
   bool m_useDithering = false;
   bool m_cmsOn = false;
   bool m_clutLoaded = false;
-  
+  bool m_useHLGtoPQ = false;
+  int m_toneMapMethod = 0;
+
   int m_iBufferIndex = 0;
   int m_iNumBuffers = 0;
   int m_iBuffersRequired = 0;
@@ -168,4 +182,8 @@ protected:
   Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_pLUTView;
   CVideoSettings& m_videoSettings;
   std::map<int, CRenderBuffer*> m_renderBuffers;
+
+  DXGI_HDR_METADATA_HDR10 m_lastHdr10 = {};
+  HDR_TYPE m_HdrType = HDR_TYPE::HDR_NONE_SDR;
+  bool m_AutoSwitchHDR = false;
 };

@@ -56,6 +56,10 @@ msgctxt "#31014"
 msgid "Episodes"
 msgstr "Jaksot"
 
+msgctxt "#31015"
+msgid "Player info"
+msgstr "Soittimen tiedot"
+
 msgctxt "#31016"
 msgid "Albums"
 msgstr "Albumit"
@@ -95,6 +99,22 @@ msgstr "Kirjautuminen"
 msgctxt "#31039"
 msgid "Updated:"
 msgstr "Päivitetty:"
+
+msgctxt "#31040"
+msgid "Select + X"
+msgstr "Valinta + X"
+
+msgctxt "#31041"
+msgid "Select + B"
+msgstr "Valinta + B"
+
+msgctxt "#31042"
+msgid "Select + Start"
+msgstr "Valinta + Aloita"
+
+msgctxt "#31043"
+msgid "PAUSED"
+msgstr "TAUKO"
 
 msgctxt "#31044"
 msgid "FAST FORWARD"

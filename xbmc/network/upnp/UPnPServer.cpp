@@ -39,6 +39,7 @@
 #include "video/VideoDatabase.h"
 #include "video/VideoThumbLoader.h"
 #include "view/GUIViewState.h"
+#include "xbmc/interfaces/AnnouncementManager.h"
 
 #include <Platinum/Source/Platinum/Platinum.h>
 
@@ -63,10 +64,12 @@ const char* video_containers[] = { "library://video/movies/titles.xml/", "librar
 /*----------------------------------------------------------------------
 |   CUPnPServer::CUPnPServer
 +---------------------------------------------------------------------*/
-CUPnPServer::CUPnPServer(const char* friendly_name, const char* uuid /*= NULL*/, int port /*= 0*/) :
-    PLT_MediaConnect(friendly_name, false, uuid, port),
+CUPnPServer::CUPnPServer(const char* friendly_name, const char* uuid /*= NULL*/, int port /*= 0*/)
+  : PLT_MediaConnect(friendly_name, false, uuid, port),
     PLT_FileMediaConnectDelegate("/", "/"),
-    m_scanning(g_application.IsMusicScanning() || g_application.IsVideoScanning())
+    m_scanning(g_application.IsMusicScanning() || g_application.IsVideoScanning()),
+    m_logger(CServiceBroker::GetLogging().GetLogger(
+        StringUtils::Format("CUPnPServer[{}]", friendly_name)))
 {
 }
 
@@ -190,7 +193,7 @@ CUPnPServer::PropagateUpdates()
 failed:
     // should attempt to start eventing on a failure
     if (service) service->PauseEventing(false);
-    CLog::Log(LOGERROR, "UPNP: Unable to propagate updates");
+    m_logger->error("Unable to propagate updates");
 }
 
 /*----------------------------------------------------------------------
@@ -252,12 +255,11 @@ NPT_String CUPnPServer::BuildSafeResourceUri(const NPT_HttpUrl &rooturi,
 /*----------------------------------------------------------------------
 |   CUPnPServer::Build
 +---------------------------------------------------------------------*/
-PLT_MediaObject*
-CUPnPServer::Build(CFileItemPtr                  item,
-                   bool                          with_count,
-                   const PLT_HttpRequestContext& context,
-                   NPT_Reference<CThumbLoader>&  thumb_loader,
-                   const char*                   parent_id /* = NULL */)
+PLT_MediaObject* CUPnPServer::Build(const CFileItemPtr& item,
+                                    bool with_count,
+                                    const PLT_HttpRequestContext& context,
+                                    NPT_Reference<CThumbLoader>& thumb_loader,
+                                    const char* parent_id /* = NULL */)
 {
     PLT_MediaObject* object = NULL;
     NPT_String       path = item->GetPath().c_str();
@@ -265,7 +267,7 @@ CUPnPServer::Build(CFileItemPtr                  item,
     //HACK: temporary disabling count as it thrashes HDD
     with_count = false;
 
-    CLog::Log(LOGDEBUG, "Preparing upnp object for item '%s'", (const char*)path);
+    m_logger->debug("Preparing upnp object for item '{}'", (const char*)path);
 
     if (path == "virtualpath://upnproot") {
         path.TrimRight("/");
@@ -408,26 +410,30 @@ failure:
 /*----------------------------------------------------------------------
 |   CUPnPServer::Announce
 +---------------------------------------------------------------------*/
-void
-CUPnPServer::Announce(AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data)
+void CUPnPServer::Announce(AnnouncementFlag flag,
+                           const std::string& sender,
+                           const std::string& message,
+                           const CVariant& data)
 {
     NPT_String path;
     int item_id;
     std::string item_type;
 
-    if (strcmp(sender, "xbmc"))
-        return;
+    if (sender != CAnnouncementManager::ANNOUNCEMENT_SENDER)
+      return;
 
-    if (strcmp(message, "OnUpdate") && strcmp(message, "OnRemove")
-        && strcmp(message, "OnScanStarted") && strcmp(message, "OnScanFinished"))
-        return;
+    if (message != "OnUpdate" && message != "OnRemove" && message != "OnScanStarted" &&
+        message != "OnScanFinished")
+      return;
 
     if (data.isNull()) {
-        if (!strcmp(message, "OnScanStarted") || !strcmp(message, "OnCleanStarted")) {
-            m_scanning = true;
+      if (message == "OnScanStarted" || message == "OnCleanStarted")
+      {
+        m_scanning = true;
         }
-        else if (!strcmp(message, "OnScanFinished") || !strcmp(message, "OnCleanFinished")) {
-            OnScanCompleted(flag);
+        else if (message == "OnScanFinished" || message == "OnCleanFinished")
+        {
+          OnScanCompleted(flag);
         }
     }
     else {
@@ -484,7 +490,7 @@ CUPnPServer::Announce(AnnouncementFlag flag, const char *sender, const char *mes
 /*----------------------------------------------------------------------
 |   TranslateWMPObjectId
 +---------------------------------------------------------------------*/
-static NPT_String TranslateWMPObjectId(NPT_String id)
+static NPT_String TranslateWMPObjectId(NPT_String id, const Logger& logger)
 {
     if (id == "0") {
         id = "virtualpath://upnproot/";
@@ -504,7 +510,7 @@ static NPT_String TranslateWMPObjectId(NPT_String id)
         id = "musicdb://songs/";
     }
 
-    CLog::Log(LOGDEBUG, "UPnP Translated id to '%s'", (const char*)id);
+    logger->debug("Translated id to '{}'", (const char*)id);
     return id;
 }
 
@@ -534,11 +540,11 @@ CUPnPServer::OnBrowseMetadata(PLT_ActionReference&          action,
 
     NPT_String                     didl;
     NPT_Reference<PLT_MediaObject> object;
-    NPT_String                     id = TranslateWMPObjectId(object_id);
+    NPT_String id = TranslateWMPObjectId(object_id, m_logger);
     CFileItemPtr                   item;
     NPT_Reference<CThumbLoader>    thumb_loader;
 
-    CLog::Log(LOGINFO, "Received UPnP Browse Metadata request for object '%s'", object_id);
+    m_logger->info("Received UPnP Browse Metadata request for object '{}'", object_id);
 
     if(NPT_FAILED(ObjectIDValidate(id))) {
         action->SetError(701, "Incorrect ObjectID.");
@@ -634,9 +640,10 @@ CUPnPServer::OnBrowseDirectChildren(PLT_ActionReference&          action,
                                     const PLT_HttpRequestContext& context)
 {
     CFileItemList items;
-    NPT_String    parent_id = TranslateWMPObjectId(object_id);
+    NPT_String parent_id = TranslateWMPObjectId(object_id, m_logger);
 
-    CLog::Log(LOGINFO, "UPnP: Received Browse DirectChildren request for object '%s', with sort criteria %s", object_id, sort_criteria);
+    m_logger->info("Received Browse DirectChildren request for object '{}', with sort criteria {}",
+                   object_id, sort_criteria);
 
     if(NPT_FAILED(ObjectIDValidate(parent_id))) {
         action->SetError(701, "Incorrect ObjectID.");
@@ -736,10 +743,8 @@ CUPnPServer::BuildResponse(PLT_ActionReference&          action,
 {
     NPT_COMPILER_UNUSED(sort_criteria);
 
-    CLog::Log(LOGDEBUG, "Building UPnP response with filter '%s', starting @ %d with %d requested",
-        filter,
-        starting_index,
-        requested_count);
+    m_logger->debug("Building UPnP response with filter '{}', starting @ {} with {} requested",
+                    filter, starting_index, requested_count);
 
     // we will reuse this ThumbLoader for all items
     NPT_Reference<CThumbLoader> thumb_loader;
@@ -798,9 +803,7 @@ CUPnPServer::BuildResponse(PLT_ActionReference&          action,
 
     didl += didl_footer;
 
-    CLog::Log(LOGDEBUG, "Returning UPnP response with %d items out of %d total matches",
-        count,
-        total);
+    m_logger->debug("Returning UPnP response with {} items out of {} total matches", count, total);
 
     NPT_CHECK(action->SetArgumentValue("Result", didl));
     NPT_CHECK(action->SetArgumentValue("NumberReturned", NPT_String::FromInteger(count)));
@@ -845,43 +848,52 @@ CUPnPServer::OnSearchContainer(PLT_ActionReference&          action,
                                const char*                   sort_criteria,
                                const PLT_HttpRequestContext& context)
 {
-    CLog::Log(LOGDEBUG, "Received Search request for object '%s' with search '%s'",
-        object_id,
-        search_criteria);
+  m_logger->debug("Received Search request for object '{}' with search '{}'", object_id,
+                  search_criteria);
 
-    NPT_String id = object_id;
-    if (id.StartsWith("musicdb://")) {
-        // we browse for all tracks given a genre, artist or album
-        if (NPT_String(search_criteria).Find("object.item.audioItem") >= 0) {
-            if (!id.EndsWith("/")) id += "/";
-            NPT_Cardinal count = id.SubString(10).Split("/").GetItemCount();
-            // remove extra empty node count
-            count = count?count-1:0;
+  NPT_String id = object_id;
+  if (id.StartsWith("musicdb://"))
+  {
+    // we browse for all tracks given a genre, artist or album
+    if (NPT_String(search_criteria).Find("object.item.audioItem") >= 0)
+    {
+      if (!id.EndsWith("/"))
+        id += "/";
+      NPT_Cardinal count = id.SubString(10).Split("/").GetItemCount();
+      // remove extra empty node count
+      count = count ? count - 1 : 0;
 
-            // genre
-            if (id.StartsWith("musicdb://genres/")) {
-                // all tracks of all genres
-                if (count == 1)
-                    id += "-1/-1/-1/";
-                // all tracks of a specific genre
-                else if (count == 2)
-                    id += "-1/-1/";
-                // all tracks of a specific genre of a specific artist
-                else if (count == 3)
-                    id += "-1/";
-            } else if (id.StartsWith("musicdb://artists/")) {
-                // all tracks by all artists
-                if (count == 1)
-                    id += "-1/-1/";
-                // all tracks of a specific artist
-                else if (count == 2)
-                    id += "-1/";
-            } else if (id.StartsWith("musicdb://albums/")) {
-                // all albums ?
-                if (count == 1) id += "-1/";
-            }
-        }
-        return OnBrowseDirectChildren(action, id, filter, starting_index, requested_count, sort_criteria, context);
+      // genre
+      if (id.StartsWith("musicdb://genres/"))
+      {
+        // all tracks of all genres
+        if (count == 1)
+          id += "-1/-1/-1/";
+        // all tracks of a specific genre
+        else if (count == 2)
+          id += "-1/-1/";
+        // all tracks of a specific genre of a specific artist
+        else if (count == 3)
+          id += "-1/";
+      }
+      else if (id.StartsWith("musicdb://artists/"))
+      {
+        // all tracks by all artists
+        if (count == 1)
+          id += "-1/-1/";
+        // all tracks of a specific artist
+        else if (count == 2)
+          id += "-1/";
+      }
+      else if (id.StartsWith("musicdb://albums/"))
+      {
+        // all albums ?
+        if (count == 1)
+          id += "-1/";
+      }
+    }
+    return OnBrowseDirectChildren(action, id, filter, starting_index, requested_count,
+                                  sort_criteria, context);
     } else if (NPT_String(search_criteria).Find("object.item.audioItem") >= 0) {
         // look for artist, album & genre filters
         NPT_String genre = FindSubCriteria(search_criteria, "upnp:genre");
@@ -1013,8 +1025,8 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
     std::string path(CURL::Decode(object_id));
     CFileItem updated;
     updated.SetPath(path);
-    CLog::Log(LOGINFO, "UPnP: OnUpdateObject: %s from %s", path.c_str(),
-                       (const char*) context.GetRemoteAddress().GetIpAddress().ToString());
+    m_logger->info("OnUpdateObject: {} from {}", path,
+                   (const char*)context.GetRemoteAddress().GetIpAddress().ToString());
 
     NPT_String playCount, position;
     int err;
@@ -1053,7 +1065,7 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
         CVideoInfoTag tag;
         db.LoadVideoInfo(file_path, tag);
         updated.SetFromVideoInfoTag(tag);
-        CLog::Log(LOGINFO, "UPNP: Translated to %s", file_path.c_str());
+        m_logger->info("Translated to {}", file_path);
 
         position = new_vals["lastPlaybackPosition"];
         playCount = new_vals["playCount"];
@@ -1077,7 +1089,8 @@ CUPnPServer::OnUpdateObject(PLT_ActionReference&             action,
               CVariant data;
               data["id"] = updated.GetVideoInfoTag()->m_iDbId;
               data["type"] = updated.GetVideoInfoTag()->m_type;
-              CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::VideoLibrary, "xbmc", "OnUpdate", data);
+              CServiceBroker::GetAnnouncementManager()->Announce(ANNOUNCEMENT::VideoLibrary,
+                                                                 "OnUpdate", data);
             }
             updatelisting = true;
         }
@@ -1131,10 +1144,10 @@ error:
     msg = "Internal error";
 
 failure:
-    CLog::Log(LOGERROR, "UPNP: OnUpdateObject failed with err %d:%s", err, msg);
-    action->SetError(err, msg);
-    service->PauseEventing(false);
-    return NPT_FAILURE;
+  m_logger->error("OnUpdateObject failed with err {}: {}", err, msg);
+  action->SetError(err, msg);
+  service->PauseEventing(false);
+  return NPT_FAILURE;
 }
 
 /*----------------------------------------------------------------------
@@ -1151,9 +1164,10 @@ CUPnPServer::ServeFile(const NPT_HttpRequest&              request,
     { NPT_AutoLock lock(m_FileMutex);
       if(NPT_SUCCEEDED(m_FileMap.Get(md5, file_path2))) {
         file_path = *file_path2;
-        CLog::Log(LOGDEBUG, "Received request to serve '%s' = '%s'", (const char*)md5, (const char*)file_path);
+        m_logger->debug("Received request to serve '{}' = '{}'", (const char*)md5,
+                        (const char*)file_path);
       } else {
-        CLog::Log(LOGDEBUG, "Received request to serve unknown md5 '%s'", (const char*)md5);
+        m_logger->debug("Received request to serve unknown md5 '{}'", (const char*)md5);
         response.SetStatus(404, "File Not Found");
         return NPT_SUCCESS;
       }
@@ -1217,85 +1231,6 @@ CUPnPServer::ServeFile(const NPT_HttpRequest&              request,
                                        file_path);
 }
 
-/*----------------------------------------------------------------------
-|   CUPnPServer::SortItems
-|
-|   Only support upnp: & dc: namespaces for now.
-|   Other servers add their own vendor-specific sort methods. This could
-|   possibly be handled with 'quirks' in the long run.
-|
-|   return true if sort criteria was matched
-+---------------------------------------------------------------------*/
-bool
-CUPnPServer::SortItems(CFileItemList& items, const char* sort_criteria)
-{
-  std::string criteria(sort_criteria);
-  if (criteria.empty()) {
-    return false;
-  }
-
-  bool sorted = false;
-  std::vector<std::string> tokens = StringUtils::Split(criteria, ",");
-  for (std::vector<std::string>::reverse_iterator itr = tokens.rbegin(); itr != tokens.rend(); ++itr) {
-    SortDescription sorting;
-    /* Platinum guarantees 1st char is - or + */
-    sorting.sortOrder = StringUtils::StartsWith(*itr, "+") ? SortOrderAscending : SortOrderDescending;
-    std::string method = itr->substr(1);
-
-    /* resource specific */
-    if (StringUtils::EqualsNoCase(method, "res@duration"))
-      sorting.sortBy = SortByTime;
-    else if (StringUtils::EqualsNoCase(method, "res@size"))
-      sorting.sortBy = SortBySize;
-    else if (StringUtils::EqualsNoCase(method, "res@bitrate"))
-      sorting.sortBy = SortByBitrate;
-
-    /* dc: */
-    else if (StringUtils::EqualsNoCase(method, "dc:date"))
-      sorting.sortBy = SortByDate;
-    else if (StringUtils::EqualsNoCase(method, "dc:title"))
-    {
-      sorting.sortBy = SortByTitle;
-      sorting.sortAttributes = SortAttributeIgnoreArticle;
-    }
-
-    /* upnp: */
-    else if (StringUtils::EqualsNoCase(method, "upnp:album"))
-      sorting.sortBy = SortByAlbum;
-    else if (StringUtils::EqualsNoCase(method, "upnp:artist") ||
-             StringUtils::EqualsNoCase(method, "upnp:albumArtist"))
-      sorting.sortBy = SortByArtist;
-    else if (StringUtils::EqualsNoCase(method, "upnp:episodeNumber"))
-      sorting.sortBy = SortByEpisodeNumber;
-    else if (StringUtils::EqualsNoCase(method, "upnp:episodeCount"))
-      sorting.sortBy = SortByNumberOfEpisodes;
-    else if (StringUtils::EqualsNoCase(method, "upnp:episodeSeason"))
-      sorting.sortBy = SortBySeason;
-    else if (StringUtils::EqualsNoCase(method, "upnp:genre"))
-      sorting.sortBy = SortByGenre;
-    else if (StringUtils::EqualsNoCase(method, "upnp:originalTrackNumber"))
-      sorting.sortBy = SortByTrackNumber;
-    else if(StringUtils::EqualsNoCase(method, "upnp:rating"))
-      sorting.sortBy = SortByMPAA;
-    else if (StringUtils::EqualsNoCase(method, "xbmc:rating"))
-      sorting.sortBy = SortByRating;
-    else if (StringUtils::EqualsNoCase(method, "xbmc:dateadded"))
-      sorting.sortBy = SortByDateAdded;
-    else if (StringUtils::EqualsNoCase(method, "xbmc:votes"))
-      sorting.sortBy = SortByVotes;
-    else {
-      CLog::Log(LOGINFO, "UPnP: unsupported sort criteria '%s' passed", method.c_str());
-      continue; // needed so unidentified sort methods don't re-sort by label
-    }
-
-    CLog::Log(LOGINFO, "UPnP: Sorting by method %d, order %d, attributes %d", sorting.sortBy, sorting.sortOrder, sorting.sortAttributes);
-    items.Sort(sorting);
-    sorted = true;
-  }
-
-  return sorted;
-}
-
 void
 CUPnPServer::DefaultSortItems(CFileItemList& items)
 {
@@ -1308,8 +1243,8 @@ CUPnPServer::DefaultSortItems(CFileItemList& items)
   }
 }
 
-NPT_Result
-CUPnPServer::AddSubtitleUriForSecResponse(NPT_String movie_md5, NPT_String subtitle_uri)
+NPT_Result CUPnPServer::AddSubtitleUriForSecResponse(const NPT_String& movie_md5,
+                                                     const NPT_String& subtitle_uri)
 {
   /* using existing m_FileMap to store subtitle uri for movie,
      adding subtitle:// prefix, because there is already entry for movie md5 with movie path */

@@ -43,7 +43,6 @@
 #include "platform/darwin/osx/CocoaInterface.h"
 #import "platform/darwin/osx/OSXTextInputResponder.h"
 #include "platform/darwin/osx/XBMCHelper.h"
-#include "platform/darwin/osx/powermanagement/CocoaPowerSyscall.h"
 
 #include <cstdlib>
 #include <signal.h>
@@ -273,7 +272,7 @@ CFArrayRef GetAllDisplayModes(CGDirectDisplayID display)
 // mimic former behavior of deprecated CGDisplayBestModeForParameters
 CGDisplayModeRef BestMatchForMode(CGDirectDisplayID display, size_t bitsPerPixel, size_t width, size_t height, boolean_t &match)
 {
-  
+
   // Get a copy of the current display mode
   CGDisplayModeRef displayMode = CGDisplayCopyDisplayMode(display);
 
@@ -445,7 +444,7 @@ NSString* screenNameForDisplay(CGDirectDisplayID displayID)
   return screenName;
 }
 
-int GetDisplayIndex(std::string dispName)
+int GetDisplayIndex(const std::string& dispName)
 {
   int ret = 0;
 
@@ -545,7 +544,8 @@ CGDisplayModeRef GetMode(int width, int height, double refreshrate, int screenId
   double rate;
   RESOLUTION_INFO res;
 
-  CLog::Log(LOGDEBUG, "GetMode looking for suitable mode with %d x %d @ %f Hz on display %d\n", width, height, refreshrate, screenIdx);
+  CLog::Log(LOGDEBUG, "GetMode looking for suitable mode with %d x %d @ %f Hz on display %d", width,
+            height, refreshrate, screenIdx);
 
   CFArrayRef displayModes = GetAllDisplayModes(GetDisplayID(screenIdx));
 
@@ -669,7 +669,6 @@ CWinSystemOSX::CWinSystemOSX()
 
   AE::CAESinkFactory::ClearSinks();
   CAESinkDARWINOSX::Register();
-  CCocoaPowerSyscall::Register();
   m_dpms = std::make_shared<CCocoaDPMSSupport>();
 }
 
@@ -695,7 +694,7 @@ void CWinSystemOSX::OnTimeout()
 
 bool CWinSystemOSX::InitWindowSystem()
 {
-  CLog::LogF(LOGNOTICE, "Setup SDL");
+  CLog::LogF(LOGINFO, "Setup SDL");
 
   /* Clean up on exit, exit on window close and interrupt */
   std::atexit(SDL_Quit);
@@ -1124,7 +1123,7 @@ void CWinSystemOSX::UpdateResolutions()
 
   int dispIdx = GetDisplayIndex(CServiceBroker::GetSettingsComponent()->GetSettings()->GetString(CSettings::SETTING_VIDEOSCREEN_MONITOR));
   GetScreenResolution(&w, &h, &fps, dispIdx);
-  NSString *dispName = screenNameForDisplay(GetDisplayID(dispIdx));  
+  NSString* dispName = screenNameForDisplay(GetDisplayID(dispIdx));
   UpdateDesktopResolution(CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP), [dispName UTF8String], w, h, fps, 0);
 
   CDisplaySettings::GetInstance().ClearCustomResolutions();
@@ -1367,7 +1366,7 @@ void CWinSystemOSX::FillInVideoModes()
     CFArrayRef displayModes = GetAllDisplayModes(GetDisplayID(disp));
     NSString *dispName = screenNameForDisplay(GetDisplayID(disp));
 
-    CLog::Log(LOGNOTICE, "Display %i has name %s", disp, [dispName UTF8String]);
+    CLog::Log(LOGINFO, "Display %i has name %s", disp, [dispName UTF8String]);
 
     if (NULL == displayModes)
       continue;
@@ -1396,7 +1395,8 @@ void CWinSystemOSX::FillInVideoModes()
           // NOTE: The refresh rate will be REPORTED AS 0 for many DVI and notebook displays.
           refreshrate = 60.0;
         }
-        CLog::Log(LOGNOTICE, "Found possible resolution for display %d with %d x %d @ %f Hz\n", disp, w, h, refreshrate);
+        CLog::Log(LOGINFO, "Found possible resolution for display %d with %d x %d @ %f Hz", disp, w,
+                  h, refreshrate);
 
         // only add the resolution if it belongs to "our" screen
         // all others are only logged above...

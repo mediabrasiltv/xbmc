@@ -19,6 +19,7 @@ class CVideoDatabase;
 
 namespace PVR
 {
+  class CPVRClient;
   class CPVREpgInfoTag;
   class CPVRRecording;
   class CPVRRecordingUid;
@@ -41,12 +42,22 @@ namespace PVR
      */
     void Unload();
 
-    void UpdateFromClient(const std::shared_ptr<CPVRRecording>& tag);
+    /*!
+     * @brief client has delivered a new/updated recording.
+     * @param tag The recording
+     * @param client The client the recording belongs to.
+     */
+    void UpdateFromClient(const std::shared_ptr<CPVRRecording>& tag, const CPVRClient& client);
 
     /*!
      * @brief refresh the recordings list from the clients.
      */
     void Update();
+
+    /*!
+     * @brief refresh the size of any in progress recordings from the clients.
+     */
+    void UpdateInProgressSize();
 
     int GetNumTVRecordings() const;
     bool HasDeletedTVRecordings() const;

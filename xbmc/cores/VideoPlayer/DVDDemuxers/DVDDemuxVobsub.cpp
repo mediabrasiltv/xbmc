@@ -14,8 +14,8 @@
 #include "DVDInputStreams/DVDInputStream.h"
 #include "DVDStreamInfo.h"
 #include "DVDSubtitles/DVDSubtitleStream.h"
-#include "cores/VideoPlayer/Interface/Addon/DemuxPacket.h"
-#include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
+#include "cores/VideoPlayer/Interface/DemuxPacket.h"
+#include "cores/VideoPlayer/Interface/TimingConstants.h"
 
 #include <string.h>
 
@@ -65,7 +65,7 @@ bool CDVDDemuxVobsub::Open(const std::string& filename, int source, const std::s
     return false;
 
   m_Demuxer.reset(new CDVDDemuxFFmpeg());
-  if(!m_Demuxer->Open(m_Input))
+  if (!m_Demuxer->Open(m_Input, false))
     return false;
 
   CDVDStreamInfo hints;

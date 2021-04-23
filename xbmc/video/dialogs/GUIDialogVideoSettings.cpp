@@ -64,7 +64,7 @@ CGUIDialogVideoSettings::CGUIDialogVideoSettings()
 
 CGUIDialogVideoSettings::~CGUIDialogVideoSettings() = default;
 
-void CGUIDialogVideoSettings::OnSettingChanged(std::shared_ptr<const CSetting> setting)
+void CGUIDialogVideoSettings::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -201,7 +201,7 @@ void CGUIDialogVideoSettings::OnSettingChanged(std::shared_ptr<const CSetting> s
   }
 }
 
-void CGUIDialogVideoSettings::OnSettingAction(std::shared_ptr<const CSetting> setting)
+void CGUIDialogVideoSettings::OnSettingAction(const std::shared_ptr<const CSetting>& setting)
 {
   if (setting == NULL)
     return;
@@ -213,10 +213,27 @@ void CGUIDialogVideoSettings::OnSettingAction(std::shared_ptr<const CSetting> se
   {
     const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
 
-    // launch calibration window
-    if (profileManager->GetMasterProfile().getLockMode() != LOCK_MODE_EVERYONE  &&
-        g_passwordManager.CheckSettingLevelLock(CServiceBroker::GetSettingsComponent()->GetSettings()->GetSetting(CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION)->GetLevel()))
+    auto settingsComponent = CServiceBroker::GetSettingsComponent();
+    if (!settingsComponent)
       return;
+
+    auto settings = settingsComponent->GetSettings();
+    if (!settings)
+      return;
+
+    auto setting = settings->GetSetting(CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION);
+    if (!setting)
+    {
+      CLog::Log(LOGERROR, "Failed to load setting for: {}",
+                CSettings::SETTING_VIDEOSCREEN_GUICALIBRATION);
+      return;
+    }
+
+    // launch calibration window
+    if (profileManager->GetMasterProfile().getLockMode() != LOCK_MODE_EVERYONE &&
+        g_passwordManager.CheckSettingLevelLock(setting->GetLevel()))
+      return;
+
     CServiceBroker::GetGUI()->GetWindowManager().ForceActivateWindow(WINDOW_SCREEN_CALIBRATION);
   }
   //! @todo implement
@@ -224,20 +241,20 @@ void CGUIDialogVideoSettings::OnSettingAction(std::shared_ptr<const CSetting> se
     Save();
 }
 
-void CGUIDialogVideoSettings::Save()
+bool CGUIDialogVideoSettings::Save()
 {
   const std::shared_ptr<CProfileManager> profileManager = CServiceBroker::GetSettingsComponent()->GetProfileManager();
 
   if (profileManager->GetMasterProfile().getLockMode() != LOCK_MODE_EVERYONE &&
       !g_passwordManager.CheckSettingLevelLock(::SettingLevel::Expert))
-    return;
+    return true;
 
   // prompt user if they are sure
   if (CGUIDialogYesNo::ShowAndGetInput(CVariant(12376), CVariant(12377)))
   { // reset the settings
     CVideoDatabase db;
     if (!db.Open())
-      return;
+      return true;
     db.EraseAllVideoSettings();
     db.Close();
 
@@ -246,6 +263,8 @@ void CGUIDialogVideoSettings::Save()
     CMediaSettings::GetInstance().GetDefaultVideoSettings().m_AudioStream = -1;
     CServiceBroker::GetSettingsComponent()->GetSettings()->Save();
   }
+
+  return true;
 }
 
 void CGUIDialogVideoSettings::SetupView()
@@ -302,31 +321,30 @@ void CGUIDialogVideoSettings::InitializeSettings()
   TranslatableIntegerSettingOptions entries;
 
   entries.clear();
-  entries.push_back(std::make_pair(16039, VS_INTERLACEMETHOD_NONE));
-  entries.push_back(std::make_pair(16019, VS_INTERLACEMETHOD_AUTO));
-  entries.push_back(std::make_pair(20131, VS_INTERLACEMETHOD_RENDER_BLEND));
-  entries.push_back(std::make_pair(20129, VS_INTERLACEMETHOD_RENDER_WEAVE));
-  entries.push_back(std::make_pair(16021, VS_INTERLACEMETHOD_RENDER_BOB));
-  entries.push_back(std::make_pair(16020, VS_INTERLACEMETHOD_DEINTERLACE));
-  entries.push_back(std::make_pair(16036, VS_INTERLACEMETHOD_DEINTERLACE_HALF));
-  entries.push_back(std::make_pair(16311, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_SPATIAL));
-  entries.push_back(std::make_pair(16310, VS_INTERLACEMETHOD_VDPAU_TEMPORAL));
-  entries.push_back(std::make_pair(16325, VS_INTERLACEMETHOD_VDPAU_BOB));
-  entries.push_back(std::make_pair(16318, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_SPATIAL_HALF));
-  entries.push_back(std::make_pair(16317, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_HALF));
-  entries.push_back(std::make_pair(16327, VS_INTERLACEMETHOD_VAAPI_BOB));
-  entries.push_back(std::make_pair(16328, VS_INTERLACEMETHOD_VAAPI_MADI));
-  entries.push_back(std::make_pair(16329, VS_INTERLACEMETHOD_VAAPI_MACI));
-  entries.push_back(std::make_pair(16330, VS_INTERLACEMETHOD_MMAL_ADVANCED));
-  entries.push_back(std::make_pair(16331, VS_INTERLACEMETHOD_MMAL_ADVANCED_HALF));
-  entries.push_back(std::make_pair(16332, VS_INTERLACEMETHOD_MMAL_BOB));
-  entries.push_back(std::make_pair(16333, VS_INTERLACEMETHOD_MMAL_BOB_HALF));
-  entries.push_back(std::make_pair(16320, VS_INTERLACEMETHOD_DXVA_AUTO));
+  entries.push_back(TranslatableIntegerSettingOption(16039, VS_INTERLACEMETHOD_NONE));
+  entries.push_back(TranslatableIntegerSettingOption(16019, VS_INTERLACEMETHOD_AUTO));
+  entries.push_back(TranslatableIntegerSettingOption(20131, VS_INTERLACEMETHOD_RENDER_BLEND));
+  entries.push_back(TranslatableIntegerSettingOption(20129, VS_INTERLACEMETHOD_RENDER_WEAVE));
+  entries.push_back(TranslatableIntegerSettingOption(16021, VS_INTERLACEMETHOD_RENDER_BOB));
+  entries.push_back(TranslatableIntegerSettingOption(16020, VS_INTERLACEMETHOD_DEINTERLACE));
+  entries.push_back(TranslatableIntegerSettingOption(16036, VS_INTERLACEMETHOD_DEINTERLACE_HALF));
+  entries.push_back(
+      TranslatableIntegerSettingOption(16311, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_SPATIAL));
+  entries.push_back(TranslatableIntegerSettingOption(16310, VS_INTERLACEMETHOD_VDPAU_TEMPORAL));
+  entries.push_back(TranslatableIntegerSettingOption(16325, VS_INTERLACEMETHOD_VDPAU_BOB));
+  entries.push_back(
+      TranslatableIntegerSettingOption(16318, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_SPATIAL_HALF));
+  entries.push_back(
+      TranslatableIntegerSettingOption(16317, VS_INTERLACEMETHOD_VDPAU_TEMPORAL_HALF));
+  entries.push_back(TranslatableIntegerSettingOption(16327, VS_INTERLACEMETHOD_VAAPI_BOB));
+  entries.push_back(TranslatableIntegerSettingOption(16328, VS_INTERLACEMETHOD_VAAPI_MADI));
+  entries.push_back(TranslatableIntegerSettingOption(16329, VS_INTERLACEMETHOD_VAAPI_MACI));
+  entries.push_back(TranslatableIntegerSettingOption(16320, VS_INTERLACEMETHOD_DXVA_AUTO));
 
   /* remove unsupported methods */
   for (TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
   {
-    if (g_application.GetAppPlayer().Supports((EINTERLACEMETHOD)it->second))
+    if (g_application.GetAppPlayer().Supports(static_cast<EINTERLACEMETHOD>(it->value)))
       ++it;
     else
       it = entries.erase(it);
@@ -343,26 +361,30 @@ void CGUIDialogVideoSettings::InitializeSettings()
   }
 
   entries.clear();
-  entries.push_back(std::make_pair(16301, VS_SCALINGMETHOD_NEAREST));
-  entries.push_back(std::make_pair(16302, VS_SCALINGMETHOD_LINEAR));
-  entries.push_back(std::make_pair(16303, VS_SCALINGMETHOD_CUBIC ));
-  entries.push_back(std::make_pair(16304, VS_SCALINGMETHOD_LANCZOS2));
-  entries.push_back(std::make_pair(16323, VS_SCALINGMETHOD_SPLINE36_FAST));
-  entries.push_back(std::make_pair(16315, VS_SCALINGMETHOD_LANCZOS3_FAST));
-  entries.push_back(std::make_pair(16322, VS_SCALINGMETHOD_SPLINE36));
-  entries.push_back(std::make_pair(16305, VS_SCALINGMETHOD_LANCZOS3));
-  entries.push_back(std::make_pair(16306, VS_SCALINGMETHOD_SINC8));
-  entries.push_back(std::make_pair(16307, VS_SCALINGMETHOD_BICUBIC_SOFTWARE));
-  entries.push_back(std::make_pair(16308, VS_SCALINGMETHOD_LANCZOS_SOFTWARE));
-  entries.push_back(std::make_pair(16309, VS_SCALINGMETHOD_SINC_SOFTWARE));
-  entries.push_back(std::make_pair(13120, VS_SCALINGMETHOD_VDPAU_HARDWARE));
-  entries.push_back(std::make_pair(16319, VS_SCALINGMETHOD_DXVA_HARDWARE));
-  entries.push_back(std::make_pair(16316, VS_SCALINGMETHOD_AUTO));
+  entries.push_back(TranslatableIntegerSettingOption(16301, VS_SCALINGMETHOD_NEAREST));
+  entries.push_back(TranslatableIntegerSettingOption(16302, VS_SCALINGMETHOD_LINEAR));
+  entries.push_back(TranslatableIntegerSettingOption(16303, VS_SCALINGMETHOD_CUBIC_B_SPLINE));
+  entries.push_back(TranslatableIntegerSettingOption(16314, VS_SCALINGMETHOD_CUBIC_MITCHELL));
+  entries.push_back(TranslatableIntegerSettingOption(16321, VS_SCALINGMETHOD_CUBIC_CATMULL));
+  entries.push_back(TranslatableIntegerSettingOption(16326, VS_SCALINGMETHOD_CUBIC_0_075));
+  entries.push_back(TranslatableIntegerSettingOption(16330, VS_SCALINGMETHOD_CUBIC_0_1));
+  entries.push_back(TranslatableIntegerSettingOption(16304, VS_SCALINGMETHOD_LANCZOS2));
+  entries.push_back(TranslatableIntegerSettingOption(16323, VS_SCALINGMETHOD_SPLINE36_FAST));
+  entries.push_back(TranslatableIntegerSettingOption(16315, VS_SCALINGMETHOD_LANCZOS3_FAST));
+  entries.push_back(TranslatableIntegerSettingOption(16322, VS_SCALINGMETHOD_SPLINE36));
+  entries.push_back(TranslatableIntegerSettingOption(16305, VS_SCALINGMETHOD_LANCZOS3));
+  entries.push_back(TranslatableIntegerSettingOption(16306, VS_SCALINGMETHOD_SINC8));
+  entries.push_back(TranslatableIntegerSettingOption(16307, VS_SCALINGMETHOD_BICUBIC_SOFTWARE));
+  entries.push_back(TranslatableIntegerSettingOption(16308, VS_SCALINGMETHOD_LANCZOS_SOFTWARE));
+  entries.push_back(TranslatableIntegerSettingOption(16309, VS_SCALINGMETHOD_SINC_SOFTWARE));
+  entries.push_back(TranslatableIntegerSettingOption(13120, VS_SCALINGMETHOD_VDPAU_HARDWARE));
+  entries.push_back(TranslatableIntegerSettingOption(16319, VS_SCALINGMETHOD_DXVA_HARDWARE));
+  entries.push_back(TranslatableIntegerSettingOption(16316, VS_SCALINGMETHOD_AUTO));
 
   /* remove unsupported methods */
   for(TranslatableIntegerSettingOptions::iterator it = entries.begin(); it != entries.end(); )
   {
-    if (g_application.GetAppPlayer().Supports((ESCALINGMETHOD)it->second))
+    if (g_application.GetAppPlayer().Supports(static_cast<ESCALINGMETHOD>(it->value)))
       ++it;
     else
       it = entries.erase(it);
@@ -403,18 +425,27 @@ void CGUIDialogVideoSettings::InitializeSettings()
   // tone mapping
   if (g_application.GetAppPlayer().Supports(RENDERFEATURE_TONEMAP))
   {
+    bool visible = !(CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
+                         CServiceBroker::GetWinSystem()->SETTING_WINSYSTEM_IS_HDR_DISPLAY) &&
+                     CServiceBroker::GetWinSystem()->IsHDRDisplay());
     entries.clear();
-    entries.push_back(std::make_pair(36554, VS_TONEMAPMETHOD_OFF));
-    entries.push_back(std::make_pair(36555, VS_TONEMAPMETHOD_REINHARD));
-    AddSpinner(groupVideo, SETTING_VIDEO_TONEMAP_METHOD, 36553, SettingLevel::Basic, videoSettings.m_ToneMapMethod, entries);
-    AddSlider(groupVideo, SETTING_VIDEO_TONEMAP_PARAM, 36556, SettingLevel::Basic, videoSettings.m_ToneMapParam, "%2.2f", 0.1f, 0.1f, 5.0f, 36556, usePopup);
+    entries.push_back(TranslatableIntegerSettingOption(36554, VS_TONEMAPMETHOD_OFF));
+    entries.push_back(TranslatableIntegerSettingOption(36555, VS_TONEMAPMETHOD_REINHARD));
+    entries.push_back(TranslatableIntegerSettingOption(36557, VS_TONEMAPMETHOD_ACES));
+    entries.push_back(TranslatableIntegerSettingOption(36558, VS_TONEMAPMETHOD_HABLE));
+
+    AddSpinner(groupVideo, SETTING_VIDEO_TONEMAP_METHOD, 36553, SettingLevel::Basic,
+               videoSettings.m_ToneMapMethod, entries, false, visible);
+    AddSlider(groupVideo, SETTING_VIDEO_TONEMAP_PARAM, 36556, SettingLevel::Basic,
+              videoSettings.m_ToneMapParam, "%2.2f", 0.1f, 0.1f, 5.0f, 36556, usePopup, false,
+              visible);
   }
 
   // stereoscopic settings
   entries.clear();
-  entries.push_back(std::make_pair(16316, RENDER_STEREO_MODE_OFF));
-  entries.push_back(std::make_pair(36503, RENDER_STEREO_MODE_SPLIT_HORIZONTAL));
-  entries.push_back(std::make_pair(36504, RENDER_STEREO_MODE_SPLIT_VERTICAL));
+  entries.push_back(TranslatableIntegerSettingOption(16316, RENDER_STEREO_MODE_OFF));
+  entries.push_back(TranslatableIntegerSettingOption(36503, RENDER_STEREO_MODE_SPLIT_HORIZONTAL));
+  entries.push_back(TranslatableIntegerSettingOption(36504, RENDER_STEREO_MODE_SPLIT_VERTICAL));
   AddSpinner(groupStereoscopic, SETTING_VIDEO_STEREOSCOPICMODE, 36535, SettingLevel::Basic, videoSettings.m_StereoMode, entries);
   AddToggle(groupStereoscopic, SETTING_VIDEO_STEREOSCOPICINVERT, 36536, SettingLevel::Basic, videoSettings.m_StereoInvert);
 
@@ -423,7 +454,8 @@ void CGUIDialogVideoSettings::InitializeSettings()
   AddButton(groupSaveAsDefault, SETTING_VIDEO_CALIBRATION, 214, SettingLevel::Basic);
 }
 
-void CGUIDialogVideoSettings::AddVideoStreams(std::shared_ptr<CSettingGroup> group, const std::string &settingId)
+void CGUIDialogVideoSettings::AddVideoStreams(const std::shared_ptr<CSettingGroup>& group,
+                                              const std::string& settingId)
 {
   if (group == NULL || settingId.empty())
     return;
@@ -435,7 +467,11 @@ void CGUIDialogVideoSettings::AddVideoStreams(std::shared_ptr<CSettingGroup> gro
   AddList(group, settingId, 38031, SettingLevel::Basic, m_videoStream, VideoStreamsOptionFiller, 38031);
 }
 
-void CGUIDialogVideoSettings::VideoStreamsOptionFiller(std::shared_ptr<const CSetting> setting, std::vector<IntegerSettingOption> &list, int &current, void *data)
+void CGUIDialogVideoSettings::VideoStreamsOptionFiller(
+    const std::shared_ptr<const CSetting>& setting,
+    std::vector<IntegerSettingOption>& list,
+    int& current,
+    void* data)
 {
   int videoStreamCount = g_application.GetAppPlayer().GetVideoStreamCount();
 
@@ -484,7 +520,10 @@ void CGUIDialogVideoSettings::VideoStreamsOptionFiller(std::shared_ptr<const CSe
   }
 }
 
-void CGUIDialogVideoSettings::VideoOrientationFiller(std::shared_ptr<const CSetting> setting, std::vector<IntegerSettingOption> &list, int &current, void *data)
+void CGUIDialogVideoSettings::VideoOrientationFiller(const std::shared_ptr<const CSetting>& setting,
+                                                     std::vector<IntegerSettingOption>& list,
+                                                     int& current,
+                                                     void* data)
 {
   list.emplace_back(g_localizeStrings.Get(687), 0);
   list.emplace_back(g_localizeStrings.Get(35229), 90);

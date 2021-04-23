@@ -11,7 +11,7 @@
 #include "RenderInfo.h"
 #include "VideoShaders/ShaderFormats.h"
 #include "cores/IPlayer.h"
-#include "cores/VideoPlayer/Process/VideoBuffer.h"
+#include "cores/VideoPlayer/Buffers/VideoBuffer.h"
 #include "utils/Geometry.h"
 
 #include <utility>
@@ -85,7 +85,10 @@ public:
   void GetVideoRect(CRect &source, CRect &dest, CRect &view);
   float GetAspectRatio() const;
 
-  static void SettingOptionsRenderMethodsFiller(std::shared_ptr<const CSetting> setting, std::vector<IntegerSettingOption> &list, int &current, void *data);
+  static void SettingOptionsRenderMethodsFiller(const std::shared_ptr<const CSetting>& setting,
+                                                std::vector<IntegerSettingOption>& list,
+                                                int& current,
+                                                void* data);
 
   void SetVideoSettings(const CVideoSettings &settings);
 

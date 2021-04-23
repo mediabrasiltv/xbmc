@@ -12,6 +12,7 @@
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
 #include "settings/lib/SettingsManager.h"
+#include "system_egl.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
 #include "windowing/GraphicContext.h"
@@ -21,7 +22,6 @@
 #include <cmath>
 #include <stdlib.h>
 
-#include <EGL/egl.h>
 #include <androidjni/Build.h>
 #include <androidjni/Display.h>
 #include <androidjni/System.h>
@@ -128,7 +128,7 @@ CAndroidUtils::CAndroidUtils()
   if (CJNIBase::GetSDKVersion() >= 24)
   {
     fetchDisplayModes();
-    for (auto res : s_res_displayModes)
+    for (const auto& res : s_res_displayModes)
     {
       if (res.iWidth > m_width || res.iHeight > m_height)
       {
@@ -201,7 +201,7 @@ bool CAndroidUtils::GetNativeResolution(RESOLUTION_INFO* res) const
     m_width = ANativeWindow_getWidth(nativeWindow);
     m_height= ANativeWindow_getHeight(nativeWindow);
     ANativeWindow_release(nativeWindow);
-    CLog::Log(LOGNOTICE,"CAndroidUtils: window resolution: %dx%d", m_width, m_height);
+    CLog::Log(LOGINFO, "CAndroidUtils: window resolution: %dx%d", m_width, m_height);
   }
 
   if (s_hasModeApi)
@@ -225,13 +225,15 @@ bool CAndroidUtils::GetNativeResolution(RESOLUTION_INFO* res) const
   res->iSubtitles    = (int)(0.965 * res->iHeight);
   res->strMode       = StringUtils::Format("%dx%d @ %.6f%s - Full Screen", res->iScreenWidth, res->iScreenHeight, res->fRefreshRate,
                                            res->dwFlags & D3DPRESENTFLAG_INTERLACED ? "i" : "");
-  CLog::Log(LOGNOTICE,"CAndroidUtils: Current resolution: %dx%d %s\n", res->iWidth, res->iHeight, res->strMode.c_str());
+  CLog::Log(LOGINFO, "CAndroidUtils: Current resolution: %dx%d %s", res->iWidth, res->iHeight,
+            res->strMode.c_str());
   return true;
 }
 
 bool CAndroidUtils::SetNativeResolution(const RESOLUTION_INFO& res)
 {
-  CLog::Log(LOGNOTICE, "CAndroidUtils: SetNativeResolution: %s: %dx%d %dx%d@%f", res.strId.c_str(), res.iWidth, res.iHeight, res.iScreenWidth, res.iScreenHeight, res.fRefreshRate);
+  CLog::Log(LOGINFO, "CAndroidUtils: SetNativeResolution: %s: %dx%d %dx%d@%f", res.strId.c_str(),
+            res.iWidth, res.iHeight, res.iScreenWidth, res.iScreenHeight, res.fRefreshRate);
 
   if (s_hasModeApi)
   {
@@ -332,7 +334,7 @@ bool CAndroidUtils::IsHDRDisplay()
   return ret;
 }
 
-void  CAndroidUtils::OnSettingChanged(std::shared_ptr<const CSetting> setting)
+void CAndroidUtils::OnSettingChanged(const std::shared_ptr<const CSetting>& setting)
 {
   const std::string &settingId = setting->GetId();
   /* Calibration (overscan / subtitles) are based on GUI size -> reset required */

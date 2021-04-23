@@ -41,9 +41,21 @@ public:
   }
 };
 
+struct EdgeInsets
+{
+  float left = 0.0f;
+  float top = 0.0f;
+  float right = 0.0f;
+  float bottom = 0.0f;
+
+  EdgeInsets() = default;
+  EdgeInsets(float l, float t, float r, float b);
+};
+
 struct RESOLUTION_INFO
 {
   OVERSCAN Overscan;
+  EdgeInsets guiInsets;
   bool bFullScreen;
   int iWidth;
   int iHeight;
@@ -68,6 +80,8 @@ class CResolutionUtils
 public:
   static RESOLUTION ChooseBestResolution(float fps, int width, int height, bool is3D);
   static bool HasWhitelist();
+  static void PrintWhitelist();
+
 protected:
   static void FindResolutionFromWhitelist(float fps, int width, int height, bool is3D, RESOLUTION &resolution);
   static bool FindResolutionFromOverride(float fps, int width, bool is3D, RESOLUTION &resolution, float& weight, bool fallback);

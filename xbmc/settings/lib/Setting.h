@@ -17,10 +17,12 @@
 #include "SettingType.h"
 #include "SettingUpdate.h"
 #include "threads/SharedSection.h"
+#include "utils/logtypes.h"
 
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 enum class SettingOptionsType {
@@ -45,8 +47,10 @@ class CSetting : public ISetting,
                  public std::enable_shared_from_this<CSetting>
 {
 public:
-  CSetting(const std::string &id, CSettingsManager *settingsManager = nullptr);
-  CSetting(const std::string &id, const CSetting &setting);
+  CSetting(const std::string& id,
+           CSettingsManager* settingsManager = nullptr,
+           const std::string& name = "CSetting");
+  CSetting(const std::string& id, const CSetting& setting, const std::string& name = "CSetting");
   ~CSetting() override = default;
 
   virtual std::shared_ptr<CSetting> Clone(const std::string &id) const = 0;
@@ -72,7 +76,7 @@ public:
   void SetLevel(SettingLevel level) { m_level = level; }
   std::shared_ptr<const ISettingControl> GetControl() const { return m_control; }
   std::shared_ptr<ISettingControl> GetControl() { return m_control; }
-  void SetControl(std::shared_ptr<ISettingControl> control) { m_control = control; }
+  void SetControl(std::shared_ptr<ISettingControl> control) { m_control = std::move(control); }
   const SettingDependencies& GetDependencies() const { return m_dependencies; }
   void SetDependencies(const SettingDependencies &dependencies) { m_dependencies = dependencies; }
   const std::set<CSettingUpdate>& GetUpdates() const { return m_updates; }
@@ -89,14 +93,17 @@ public:
   bool IsVisible() const override;
 
   // implementation of ISettingCallback
-  void OnSettingAction(std::shared_ptr<const CSetting> setting) override;
+  void OnSettingAction(const std::shared_ptr<const CSetting>& setting) override;
 
 protected:
   // implementation of ISettingCallback
-  bool OnSettingChanging(std::shared_ptr<const CSetting> setting) override;
-  void OnSettingChanged(std::shared_ptr<const CSetting> setting) override;
-  bool OnSettingUpdate(std::shared_ptr<CSetting> setting, const char *oldSettingId, const TiXmlNode *oldSettingNode) override;
-  void OnSettingPropertyChanged(std::shared_ptr<const CSetting> setting, const char *propertyName) override;
+  bool OnSettingChanging(const std::shared_ptr<const CSetting>& setting) override;
+  void OnSettingChanged(const std::shared_ptr<const CSetting>& setting) override;
+  bool OnSettingUpdate(const std::shared_ptr<CSetting>& setting,
+                       const char* oldSettingId,
+                       const TiXmlNode* oldSettingNode) override;
+  void OnSettingPropertyChanged(const std::shared_ptr<const CSetting>& setting,
+                                const char* propertyName) override;
 
   void Copy(const CSetting &setting);
 
@@ -117,6 +124,8 @@ protected:
   mutable CSharedSection m_critical;
 
   std::string m_referencedId;
+
+  static Logger s_logger;
 };
 
 template<typename TValue, SettingType TSettingType>
@@ -131,11 +140,15 @@ public:
   static SettingType Type() { return TSettingType; }
 
 protected:
-  CTraitedSetting(const std::string &id, CSettingsManager *settingsManager = nullptr)
-    : CSetting(id, settingsManager)
+  CTraitedSetting(const std::string& id,
+                  CSettingsManager* settingsManager = nullptr,
+                  const std::string& name = "CTraitedSetting")
+    : CSetting(id, settingsManager, name)
   { }
-  CTraitedSetting(const std::string &id, const CTraitedSetting &setting)
-    : CSetting(id, setting)
+  CTraitedSetting(const std::string& id,
+                  const CTraitedSetting& setting,
+                  const std::string& name = "CTraitedSetting")
+    : CSetting(id, setting, name)
   { }
   ~CTraitedSetting() override = default;
 };
@@ -168,7 +181,7 @@ public:
   SettingType GetElementType() const;
   std::shared_ptr<CSetting> GetDefinition() { return m_definition; }
   std::shared_ptr<const CSetting> GetDefinition() const { return m_definition; }
-  void SetDefinition(std::shared_ptr<CSetting> definition) { m_definition = definition; }
+  void SetDefinition(std::shared_ptr<CSetting> definition) { m_definition = std::move(definition); }
 
   const std::string& GetDelimiter() const { return m_delimiter; }
   void SetDelimiter(const std::string &delimiter) { m_delimiter = delimiter; }
@@ -183,7 +196,6 @@ public:
   bool SetValue(const SettingList &values);
   const SettingList& GetDefault() const { return m_defaults; }
   void SetDefault(const SettingList &values);
-  bool FindIntInList(int value) const;
 
 protected:
   void copy(const CSettingList &setting);
@@ -292,6 +304,7 @@ public:
     m_optionsFiller = optionsFiller;
     m_optionsFillerData = data;
   }
+  IntegerSettingOptions GetDynamicOptions() const { return m_dynamicOptions; }
   IntegerSettingOptions UpdateDynamicOptions();
   SettingOptionsSort GetOptionsSort() const { return m_optionsSort; }
   void SetOptionsSort(SettingOptionsSort optionsSort) { m_optionsSort = optionsSort; }
@@ -394,6 +407,8 @@ public:
 
   virtual bool AllowEmpty() const { return m_allowEmpty; }
   void SetAllowEmpty(bool allowEmpty) { m_allowEmpty = allowEmpty; }
+  virtual bool AllowNewOption() const { return m_allowNewOption; }
+  void SetAllowNewOption(bool allowNewOption) { m_allowNewOption = allowNewOption; }
 
   SettingOptionsType GetOptionsType() const;
   const TranslatableStringSettingOptions& GetTranslatableOptions() const { return m_translatableOptions; }
@@ -411,6 +426,7 @@ public:
     m_optionsFiller = optionsFiller;
     m_optionsFillerData = data;
   }
+  StringSettingOptions GetDynamicOptions() const { return m_dynamicOptions; }
   StringSettingOptions UpdateDynamicOptions();
   SettingOptionsSort GetOptionsSort() const { return m_optionsSort; }
   void SetOptionsSort(SettingOptionsSort optionsSort) { m_optionsSort = optionsSort; }
@@ -421,6 +437,7 @@ protected:
   std::string m_value;
   std::string m_default;
   bool m_allowEmpty = false;
+  bool m_allowNewOption = false;
   TranslatableStringSettingOptions m_translatableOptions;
   StringSettingOptions m_options;
   std::string m_optionsFillerName;

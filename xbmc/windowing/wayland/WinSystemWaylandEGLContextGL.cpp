@@ -10,20 +10,28 @@
 
 #include "OptionalsReg.h"
 #include "cores/RetroPlayer/process/RPProcessInfo.h"
+#include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererDMA.h"
 #include "cores/RetroPlayer/rendering/VideoRenderers/RPRendererOpenGL.h"
 #include "cores/VideoPlayer/VideoRenderers/LinuxRendererGL.h"
 #include "rendering/gl/ScreenshotSurfaceGL.h"
+#include "utils/BufferObjectFactory.h"
+#include "utils/DMAHeapBufferObject.h"
+#include "utils/UDMABufferObject.h"
 #include "utils/log.h"
+#include "windowing/WindowSystemFactory.h"
 
-#include <EGL/egl.h>
 #include <EGL/eglext.h>
 
 using namespace KODI::WINDOWING::WAYLAND;
 
-std::unique_ptr<CWinSystemBase> CWinSystemBase::CreateWinSystem()
+void CWinSystemWaylandEGLContextGL::Register()
 {
-  std::unique_ptr<CWinSystemBase> winSystem(new CWinSystemWaylandEGLContextGL());
-  return winSystem;
+  CWindowSystemFactory::RegisterWindowSystem(CreateWinSystem, "wayland");
+}
+
+std::unique_ptr<CWinSystemBase> CWinSystemWaylandEGLContextGL::CreateWinSystem()
+{
+  return std::make_unique<CWinSystemWaylandEGLContextGL>();
 }
 
 bool CWinSystemWaylandEGLContextGL::InitWindowSystem()
@@ -34,17 +42,26 @@ bool CWinSystemWaylandEGLContextGL::InitWindowSystem()
   }
 
   CLinuxRendererGL::Register();
+  RETRO::CRPProcessInfo::RegisterRendererFactory(new RETRO::CRendererFactoryDMA);
   RETRO::CRPProcessInfo::RegisterRendererFactory(new RETRO::CRendererFactoryOpenGL);
 
   bool general, deepColor;
-  m_vaapiProxy.reset(::WAYLAND::VaapiProxyCreate());
-  ::WAYLAND::VaapiProxyConfig(m_vaapiProxy.get(),GetConnection()->GetDisplay(),
-                              m_eglContext.GetEGLDisplay());
-  ::WAYLAND::VAAPIRegisterRender(m_vaapiProxy.get(), general, deepColor);
+  m_vaapiProxy.reset(WAYLAND::VaapiProxyCreate());
+  WAYLAND::VaapiProxyConfig(m_vaapiProxy.get(), GetConnection()->GetDisplay(),
+                            m_eglContext.GetEGLDisplay());
+  WAYLAND::VAAPIRegisterRender(m_vaapiProxy.get(), general, deepColor);
   if (general)
   {
-    ::WAYLAND::VAAPIRegister(m_vaapiProxy.get(), deepColor);
+    WAYLAND::VAAPIRegister(m_vaapiProxy.get(), deepColor);
   }
+
+  CBufferObjectFactory::ClearBufferObjects();
+#if defined(HAVE_LINUX_MEMFD) && defined(HAVE_LINUX_UDMABUF)
+  CUDMABufferObject::Register();
+#endif
+#if defined(HAVE_LINUX_DMA_HEAP)
+  CDMAHeapBufferObject::Register();
+#endif
 
   CScreenshotSurfaceGL::Register();
 
@@ -104,5 +121,5 @@ void CWinSystemWaylandEGLContextGL::PresentRenderImpl(bool rendered)
 
 void CWinSystemWaylandEGLContextGL::delete_CVaapiProxy::operator()(CVaapiProxy *p) const
 {
-  ::WAYLAND::VaapiProxyDelete(p);
+  WAYLAND::VaapiProxyDelete(p);
 }

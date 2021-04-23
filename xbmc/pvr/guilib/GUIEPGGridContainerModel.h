@@ -89,6 +89,7 @@ namespace PVR
     std::shared_ptr<CFileItem> GetGridItem(int iChannel, int iBlock) const;
     int GetGridItemStartBlock(int iChannel, int iBlock) const;
     int GetGridItemEndBlock(int iChannel, int iBlock) const;
+    CDateTime GetGridItemEndTime(int iChannel, int iBlock) const;
     float GetGridItemWidth(int iChannel, int iBlock) const;
     float GetGridItemOriginWidth(int iChannel, int iBlock) const;
     void DecreaseGridItemWidth(int iChannel, int iBlock, float fSize);
@@ -114,6 +115,9 @@ namespace PVR
     GridItem* GetGridItemPtr(int iChannel, int iBlock) const;
     std::shared_ptr<CFileItem> CreateGapItem(int iChannel) const;
     std::shared_ptr<CFileItem> GetItem(int iChannel, int iBlock) const;
+
+    std::vector<std::shared_ptr<CPVREpgInfoTag>> GetEPGTimeline(
+        int iChannel, const CDateTime& minEventEnd, const CDateTime& maxEventStart) const;
 
     struct EpgTags
     {

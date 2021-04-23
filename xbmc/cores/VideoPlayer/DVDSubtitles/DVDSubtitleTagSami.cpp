@@ -10,6 +10,8 @@
 
 #include "DVDCodecs/Overlay/DVDOverlayText.h"
 #include "DVDSubtitleStream.h"
+#include "utils/CharsetConverter.h"
+#include "utils/HTMLUtil.h"
 #include "utils/RegExp.h"
 #include "utils/StringUtils.h"
 
@@ -24,7 +26,7 @@ bool CDVDSubtitleTagSami::Init()
   delete m_tags;
   delete m_tagOptions;
   m_tags = new CRegExp(true);
-  if (!m_tags->RegComp("(<[^>]*>|\\{[^\\}]*\\})"))
+  if (!m_tags->RegComp("(<[^>]*>|\\{[^\\}]*\\})|\\[nh]"))
     return false;
 
   m_tagOptions = new CRegExp(true);
@@ -169,10 +171,17 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
       pos = del_start;
       m_flag[FLAG_LANGUAGE] = false;
     }
-    else if (StringUtils::StartsWith(fullTag, "<br") && !strUTF8.empty())
+    else if ((fullTag == "\\n") || (StringUtils::StartsWith(fullTag, "<br") && !strUTF8.empty()))
     {
       strUTF8.insert(pos, "\n");
       pos += 1;
+    }
+    // SubRip (.srt) hard space
+    else if (fullTag == "\\h")
+    {
+      // Unicode no-break space
+      strUTF8.insert(pos, "\xC2\xA0");
+      pos += 2;
     }
   }
 
@@ -184,6 +193,11 @@ void CDVDSubtitleTagSami::ConvertLine(CDVDOverlayText* pOverlay, const char* lin
 
   if( strUTF8[strUTF8.size()-1] == '\n' )
     strUTF8.erase(strUTF8.size()-1);
+
+  std::wstring wStrHtml, wStr;
+  g_charsetConverter.utf8ToW(strUTF8, wStrHtml, false);
+  HTML::CHTMLUtil::ConvertHTMLToW(wStrHtml, wStr);
+  g_charsetConverter.wToUTF8(wStr, strUTF8);
 
   // add a new text element to our container
   pOverlay->AddElement(new CDVDOverlayText::CElementText(strUTF8.c_str()));
